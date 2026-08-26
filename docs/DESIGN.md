@@ -119,6 +119,15 @@ formats that carry no EXIF.
 EXIF is *inserted*, never re-encoded: the compressed image data is byte-identical before
 and after (there is a test pinning this).
 
+### Timezones
+
+The stamp preserves the timezone the timestamp arrives with; only a naive datetime is
+interpreted as local. Feed timestamps already carry the offset the post was made in, and
+rewriting that into the downloading machine's zone would make the same post stamp
+differently on a laptop and on a server. CI runs the suite twice, once in the runner's UTC
+and once under `TZ=Asia/Kolkata`, because this bug passed locally and only failed on a UTC
+runner.
+
 ### The honest caveat
 
 The stamped time is the **post date**, not the capture date. Seesaw's API exposes no

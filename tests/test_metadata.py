@@ -138,3 +138,17 @@ def _scan_segments(data: bytes) -> dict:
         size = struct.unpack(">H", data[i + 2 : i + 4])[0]
         i += 2 + size
     return {"entropy": b""}
+
+
+def test_explicit_offset_is_preserved_not_rewritten(jpeg: Path, reporter: Reporter) -> None:
+    """The stamp must not depend on the downloading machine's timezone.
+
+    Feed timestamps already carry the offset the post was made in. Converting them to the
+    local zone would make the same post stamp differently on a laptop in New York and a
+    server in UTC -- and made the CI run fail while passing locally.
+    """
+    india = datetime(2026, 5, 14, 9, 12, 3, tzinfo=timezone(timedelta(hours=5, minutes=30)))
+    stamp(jpeg, india, reporter)
+    exif = piexif.load(str(jpeg))
+    assert exif["Exif"][piexif.ExifIFD.DateTimeOriginal] == b"2026:05:14 09:12:03"
+    assert exif["Exif"][piexif.ExifIFD.OffsetTimeOriginal] == b"+05:30"

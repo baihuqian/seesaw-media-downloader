@@ -22,6 +22,9 @@ jobs:
       - run: uv run ruff check .
       - run: uv run mypy src
       - run: uv run pytest -q
+      # A UTC runner once passed locally and failed here: timezone-dependent behaviour
+      # only shows up when the zone is not the developer's. Run a second, offset zone.
+      - run: TZ=Asia/Kolkata uv run pytest -q
 
   build:
     runs-on: ubuntu-latest

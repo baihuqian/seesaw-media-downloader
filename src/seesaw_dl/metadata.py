@@ -58,9 +58,13 @@ def set_file_times(path: Path, taken_at: datetime) -> None:
 def _write_exif(
     path: Path, taken_at: datetime, reporter: Reporter, caption: str, source: str
 ) -> bool:
-    local = taken_at.astimezone()
-    when = local.strftime("%Y:%m:%d %H:%M:%S")
-    offset = _utc_offset(local)
+    # Preserve the caller's timezone. Feed timestamps already carry the offset the post
+    # was made in, and rewriting that into the machine's zone would make the same post
+    # stamp differently depending on where it was downloaded. Only a naive datetime --
+    # which has no offset to preserve -- is interpreted as local.
+    moment = taken_at if taken_at.tzinfo is not None else taken_at.astimezone()
+    when = moment.strftime("%Y:%m:%d %H:%M:%S")
+    offset = _utc_offset(moment)
 
     try:
         existing = piexif.load(str(path))
