@@ -51,6 +51,7 @@ last resort.
 | `errors.py` | The deliberate exception types. |
 | `api.py` | Read-only HTTP client over the endpoints above, with retries and `ApiContractError` on shape changes. |
 | `models.py` | `Child`, `SchoolClass`, `FeedItem`, `MediaAsset` — narrow views over wide payloads. |
+| `dates.py` | Parses `--since` (`YYYY-MM-DD` or `Nd`) into a local-time instant. |
 | `planner.py` | Walks every child and class into a `Plan`; the single source of truth for `--list-only` and downloads alike. |
 | `render.py` | Table and newline-delimited JSON rendering of a plan. |
 | `downloader.py` | *(slice 3)* Async downloads, atomic writes, sidecars. |
@@ -83,6 +84,16 @@ again".
 **Every other command is non-interactive.** `download` calls `load_session()`, which never
 launches a browser and never reads the password — with no cached session it explains what
 to run and exits non-zero. A repeat `login` reuses the cache and returns in about a second.
+
+## The `--since` window
+
+`YYYY-MM-DD` resolves to local midnight, so the named day is fully included; `Nd` is a
+rolling window from now. Both are local, matching the folder layout and the EXIF stamps —
+a cutoff interpreted in another zone would silently gain or lose a day's posts.
+
+Pagination stops early once a window is in effect, but **not** at the first item older than
+the cutoff: a pinned or back-dated post would truncate the run. Older items are skipped
+individually, and pagination stops only when an entire page yields nothing new.
 
 ## Timestamps and photo libraries
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 import httpx
@@ -148,3 +149,109 @@ def test_never_marks_items_as_seen(session: Session, reporter: Reporter) -> None
         "update_seen_state" not in str(call.request.url) for call in respx.calls
     )
     assert all(call.request.method == "GET" for call in respx.calls)
+
+
+def _feed_page(items: list[dict], last_key: str | None) -> dict:
+    return {"status": "OK", "response": {"items": {"objects": items, "last_key": last_key}}}
+
+
+def _item(day: int) -> dict:
+    """A single-page item posted at noon on 2026-08-<day>, local time.
+
+    Each day gets its own asset *path*: the planner keys on the storage path, so reusing
+    one path across items would (correctly) dedupe them down to a single asset.
+    """
+    when = datetime(2026, 8, day, 12, 0).astimezone().timestamp()
+    return {
+        "item": {
+            "item_id": f"item.{day:08d}-0000-4000-8000-000000000000",
+            "create_date": when,
+            "num_pages": 1,
+            "class_name": "Class",
+            "pages": {
+                "objects": [
+                    {"composite_image_url": f"https://assets.seesaw.me/us-2/day{day}.jpg"}
+                ]
+            },
+        }
+    }
+
+
+def _mock_account_with_feed(pages: list[dict]) -> None:
+    respx.get(f"{BASE_URL}{DASHBOARD}").mock(
+        return_value=httpx.Response(200, json=fixture("dashboard.json"))
+    )
+    respx.get(f"{BASE_URL}{CHILD_CLASSES}").mock(
+        return_value=httpx.Response(200, json=fixture("child_classes.json"))
+    )
+    respx.get(f"{BASE_URL}{CLASS_FEED}").mock(
+        side_effect=[httpx.Response(200, json=page) for page in pages]
+    )
+
+
+@respx.mock
+def test_since_filters_out_older_items(session: Session, reporter: Reporter) -> None:
+    _mock_account_with_feed([_feed_page([_item(25), _item(20), _item(10)], None)])
+    cutoff = datetime(2026, 8, 18).astimezone()
+    with SeesawClient(session, reporter) as client:
+        plan = build_plan(client, reporter, since=cutoff)
+    assert len(plan) == 2
+    assert all(entry.asset.created_at >= cutoff for entry in plan.assets)
+
+
+@respx.mock
+def test_since_boundary_is_inclusive(session: Session, reporter: Reporter) -> None:
+    """A post exactly at the cutoff instant belongs in the window."""
+    _mock_account_with_feed([_feed_page([_item(20)], None)])
+    cutoff = datetime(2026, 8, 20, 12, 0).astimezone()
+    with SeesawClient(session, reporter) as client:
+        plan = build_plan(client, reporter, since=cutoff)
+    assert len(plan) == 1
+
+
+@respx.mock
+def test_pagination_stops_once_a_whole_page_predates_the_cutoff(
+    session: Session, reporter: Reporter
+) -> None:
+    """The point of --since: don't walk years of history to find nothing."""
+    _mock_account_with_feed(
+        [
+            _feed_page([_item(25), _item(24)], "cursor-1"),
+            _feed_page([_item(5), _item(4)], "cursor-2"),
+            _feed_page([_item(3)], "cursor-3"),  # must never be requested
+        ]
+    )
+    cutoff = datetime(2026, 8, 20).astimezone()
+    with SeesawClient(session, reporter) as client:
+        plan = build_plan(client, reporter, since=cutoff)
+    assert len(plan) == 2
+    feed_calls = [c for c in respx.calls if str(CLASS_FEED) in str(c.request.url)]
+    assert len(feed_calls) == 2  # stopped after the first fully-old page
+
+
+@respx.mock
+def test_out_of_order_item_does_not_truncate_the_run(
+    session: Session, reporter: Reporter
+) -> None:
+    """A back-dated or pinned post must not end pagination early."""
+    _mock_account_with_feed(
+        [
+            _feed_page([_item(25), _item(1), _item(24)], "cursor-1"),
+            _feed_page([_item(23)], None),
+        ]
+    )
+    cutoff = datetime(2026, 8, 20).astimezone()
+    with SeesawClient(session, reporter) as client:
+        plan = build_plan(client, reporter, since=cutoff)
+    days = sorted(entry.asset.created_at.day for entry in plan.assets)
+    assert days == [23, 24, 25]  # the old item skipped, the run continued
+
+
+@respx.mock
+def test_no_since_walks_the_whole_feed(session: Session, reporter: Reporter) -> None:
+    _mock_account_with_feed(
+        [_feed_page([_item(25)], "cursor-1"), _feed_page([_item(1)], None)]
+    )
+    with SeesawClient(session, reporter) as client:
+        plan = build_plan(client, reporter)
+    assert len(plan) == 2

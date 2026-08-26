@@ -14,7 +14,7 @@ slice-by-slice plan.
 
 - [x] Config resolution (flag → env → `.env` → default) and login
 - [x] `--list-only`
-- [ ] `--since`
+- [x] `--since`
 - [ ] `--all`
 - [ ] `--skip-existing`
 - [ ] Docker packaging
@@ -49,6 +49,19 @@ seesaw-dl download --list-only
 ```bash
 seesaw-dl download --list-only --json
 ```
+
+Limit the window to recent posts — either an absolute date or a number of days back:
+
+```bash
+seesaw-dl download --list-only --since 2026-01-31
+```
+
+```bash
+seesaw-dl download --list-only --since 30d
+```
+
+An absolute date covers the **whole** of that day; `30d` is a rolling window from now.
+Both are interpreted in your local timezone, matching the folder layout and EXIF stamps.
 
 Configuration comes from a CLI flag, an environment variable, a `.env` file, or a default —
 in that order. See `.env.example`.

@@ -11,6 +11,7 @@ from . import __version__
 from .api import SeesawClient
 from .auth import SessionStore, get_session, load_session
 from .config import LogLevel, resolve_settings
+from .dates import describe, parse_since
 from .errors import SeesawError
 from .logging import Reporter, register_secret
 from .planner import build_plan
@@ -135,6 +136,8 @@ def download(
 
     try:
         output_dir = settings.output_dir if settings.list_only else settings.require_output_dir()
+        # Distinct name: `since` is the raw CLI string, `since_at` the resolved instant.
+        since_at = parse_since(settings.since)
         store = SessionStore(settings.session_file)
         session = load_session(store, reporter)
 
@@ -142,12 +145,12 @@ def download(
         reporter.info(
             "Mode: "
             + ("list-only" if settings.list_only else "download")
-            + (f", since {settings.since}" if settings.since else "")
+            + f", {describe(since_at)}"
             + (f", into {output_dir}" if output_dir else "")
         )
 
         with SeesawClient(session, reporter) as client:
-            plan = build_plan(client, reporter)
+            plan = build_plan(client, reporter, since=since_at)
     except SeesawError as exc:
         reporter.error(str(exc))
         raise typer.Exit(code=1) from exc

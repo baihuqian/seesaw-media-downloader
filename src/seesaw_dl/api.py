@@ -148,9 +148,16 @@ class SeesawClient:
         since: datetime | None = None,
         page_size: int = DEFAULT_PAGE_SIZE,
     ) -> Iterator[FeedItem]:
-        """Yield journal items newest-first, stopping early once older than ``since``."""
+        """Yield journal items, stopping early once a whole page predates ``since``.
+
+        The feed is ordered newest-first, but stopping at the *first* older item would
+        truncate the run if that ordering ever wobbles (a pinned or back-dated post is
+        enough). Instead, older items are skipped individually and pagination stops only
+        when a page yields nothing new at all.
+        """
         start_key: str | None = None
         seen = 0
+        skipped = 0
         while True:
             data = self._get(
                 CLASS_FEED,
@@ -166,19 +173,27 @@ class SeesawClient:
                     f"changed its web app; keys present: {sorted(data)[:12]}"
                 )
             objects = items.get("objects") or []
+            yielded_here = 0
             for entry in objects:
                 item = FeedItem.parse(entry, child.display_name, school_class.name)
                 if since is not None and item.created_at < since:
-                    self.reporter.debug(
-                        f"reached {item.created_at.date()}, older than the --since cutoff"
-                    )
-                    return
+                    skipped += 1
+                    continue
+                yielded_here += 1
                 seen += 1
                 yield item
 
             start_key = items.get("last_key")
             if not objects or not start_key:
-                self.reporter.debug(f"feed exhausted for {school_class.name} after {seen} items")
+                self.reporter.debug(
+                    f"feed exhausted for {school_class.name} after {seen} items"
+                )
+                return
+            if since is not None and objects and yielded_here == 0:
+                self.reporter.debug(
+                    f"whole page predates the --since cutoff; stopping after {seen} items "
+                    f"({skipped} older ones skipped)"
+                )
                 return
 
     def full_item(self, item: FeedItem) -> FeedItem:
