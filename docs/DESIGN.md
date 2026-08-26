@@ -68,11 +68,17 @@ files import into Apple Photos, Immich or Lightroom in *download* order rather t
 order the moments happened, because those libraries sort on EXIF `DateTimeOriginal` and
 fall back to file mtime.
 
+**EXIF is the authoritative field, deliberately.** `DateTimeOriginal` is what Photos,
+Immich and Lightroom read first, so once it is set the file's own create/modify dates stop
+mattering for viewing order — copying, syncing or re-downloading a file cannot disturb
+where it lands on the timeline. The mtime is set as well, but only as the fallback for
+formats that carry no EXIF.
+
 `metadata.py` therefore stamps every download:
 
 | File type | What gets set |
 |---|---|
-| JPEG | `DateTimeOriginal`, `DateTimeDigitized`, `DateTime`, plus `OffsetTime*` so the time is not naive; `ImageDescription` gets the caption; and the file mtime. |
+| JPEG | **`DateTimeOriginal`** (authoritative), plus `DateTimeDigitized`, `DateTime` and `OffsetTime*` so the time is not naive; `ImageDescription` gets the caption; and the file mtime. |
 | Everything else (video, PDF, PNG) | File mtime only — the fallback every library uses. |
 
 EXIF is *inserted*, never re-encoded: the compressed image data is byte-identical before

@@ -74,9 +74,13 @@ Your password is never logged, and the session cache is written with `0600` perm
 
 Seesaw strips EXIF from the media it serves, so downloads would otherwise import into
 Apple Photos, Immich or Lightroom in download order instead of chronological order. Every
-download is stamped: JPEGs get EXIF `DateTimeOriginal` (with a UTC offset) and the caption
-in `ImageDescription`; every file gets its modification time set. The image data itself is
-never re-encoded.
+download is stamped: JPEGs get EXIF **`DateTimeOriginal`** (with a UTC offset) set to the
+post time, and the caption in `ImageDescription`; every file gets its modification time set
+too, for formats that carry no EXIF. The image data itself is never re-encoded.
+
+`DateTimeOriginal` is what those libraries read first, so your photos stay in the right
+chronological order no matter what the file's own create or modify dates say — copying or
+re-downloading a file cannot move it on the timeline.
 
 The stamp is the **post date** — Seesaw's API exposes no capture date at all, so a photo
 posted a week after it was taken carries the post time. Each file records that caveat in
