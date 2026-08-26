@@ -7,7 +7,7 @@ from seesaw_dl.models import FeedItem, _asset_id, _kind_for, _safe
 
 def make_item(**overrides) -> FeedItem:
     data = {
-        "item_id": "item.adae0438-83d5-4655-b2a5-9f1cde356f2f",
+        "item_id": "item.1a2b3c4d-5e6f-4000-8000-000000000000",
         "create_date": 1787692822.4114704,
         "num_pages": 1,
         "pages": {
@@ -48,7 +48,7 @@ def test_filename_and_layout() -> None:
     day = asset.created_at.strftime("%Y-%m-%d")
     assert path.parts == ("Alex Rivera", day[:4], day, asset.filename)
     assert asset.filename.startswith(day)
-    assert asset.filename.endswith("_adae0438_p1.jpg")
+    assert asset.filename.endswith("_1a2b3c4d_p1.jpg")
 
 
 def test_timestamps_are_local_so_evening_posts_keep_their_date() -> None:

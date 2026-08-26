@@ -19,7 +19,6 @@ def test_defaults_when_nothing_supplied() -> None:
     assert settings.output_dir is None
     assert settings.list_only is False
     assert settings.download_all is False
-    assert settings.skip_existing is True
     assert settings.since is None
     assert settings.concurrency == 4
     assert settings.session_file == DEFAULT_SESSION_FILE

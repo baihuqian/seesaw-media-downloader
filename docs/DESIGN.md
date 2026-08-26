@@ -56,7 +56,7 @@ last resort.
 | `render.py` | Table and newline-delimited JSON rendering of a plan. |
 | `downloader.py` | Bounded-concurrency async downloads, atomic writes, per-post sidecars, EXIF stamping on arrival. |
 | — | Endpoint discovery turned out to be unnecessary: the endpoints are stable constants in `api.py`, and a change surfaces as `ApiContractError` rather than being silently guessed at. |
-| `manifest.py` | `manifest.json` index backing `--skip-existing`. |
+| `manifest.py` | `manifest.json` index backing the skip-existing default. |
 
 ## Login and sessions
 
@@ -144,7 +144,7 @@ time. Rather than let that pass as camera truth, every stamped file says so in i
 
 Assets stream to a `.part` file and are `os.replace`d into position only once complete and
 length-checked, so an interrupted run never leaves a half-written photo that a later
-`--skip-existing` would mistake for finished work. Concurrency is bounded (default 4) and
+a skip-existing run would mistake for finished work. Concurrency is bounded (default 4) and
 transient failures back off and retry.
 
 ### Sizes in the manifest
@@ -155,9 +155,23 @@ the served length would make every later presence check miss and re-download the
 library. The served length is kept separately as `source_size`, and `sha256` hashes the
 served bytes so it identifies the source rather than our stamped copy.
 
+Skipping what is already downloaded is the **default and has no flag of its own**: `--all`
+(and its inverse `--no-all`) is the single, unambiguous way to control it. An earlier
+`--no-skip-existing` was removed because it was an exact synonym for `--all`, and two
+spellings of one behaviour is a bug waiting to happen.
+
 The manifest is a convenience, not the truth: a file the user deleted is not present just
 because the index says so, and a file already sitting at the expected path (a restored
 backup, a lost manifest) is treated as present. `--all` ignores presence entirely.
+
+## Distribution
+
+No Docker image. Sign-in needs a browser plus a human to solve a reCAPTCHA, and a
+container can offer neither, so an image would ship a tool whose first command cannot run
+inside it. The deliverable is the Python package plus `playwright install chromium`.
+
+The one containerisable slice is `download`, which needs no browser and no password: run
+`login` on a host and mount `session.json` read-only. Not built, and not planned.
 
 ## Secrets
 

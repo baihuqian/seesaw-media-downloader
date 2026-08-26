@@ -2,7 +2,7 @@
 
 Downloads run concurrently but politely, stream to a temporary file and are moved into
 place only once complete, so an interrupted run never leaves a half-written photo that a
-later ``--skip-existing`` would mistake for finished work.
+later skip-existing run would mistake for finished work.
 """
 
 from __future__ import annotations
@@ -183,7 +183,7 @@ async def _fetch(client: httpx.AsyncClient, url: str, destination: Path) -> tupl
             raise DownloadError("server returned an empty file")
 
         # Only now does the file exist under its real name: a partial download can never
-        # be mistaken for a finished one by a later --skip-existing run.
+        # be mistaken for a finished one by a later skip-existing run.
         os.replace(partial, destination)
     except BaseException:
         partial.unlink(missing_ok=True)

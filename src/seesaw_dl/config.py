@@ -47,8 +47,9 @@ class Settings(BaseSettings):
 
     # Modes
     list_only: bool = False
+    # Skipping what is already downloaded is the default and has no flag of its own:
+    # `--all` (or `--no-all`) is the single, unambiguous way to control it.
     download_all: bool = False
-    skip_existing: bool = True
     since: str | None = None
 
     # Behaviour
@@ -107,8 +108,7 @@ _SOURCES: dict[str, tuple[str, str]] = {
     "password": ("--password", "SEESAW_PASSWORD"),
     "output_dir": ("--out", "SEESAW_OUTPUT_DIR"),
     "list_only": ("--list-only", "SEESAW_LIST_ONLY"),
-    "download_all": ("--all", "SEESAW_DOWNLOAD_ALL"),
-    "skip_existing": ("--skip-existing/--no-skip-existing", "SEESAW_SKIP_EXISTING"),
+    "download_all": ("--all/--no-all", "SEESAW_DOWNLOAD_ALL"),
     "since": ("--since", "SEESAW_SINCE"),
     "concurrency": ("--concurrency", "SEESAW_CONCURRENCY"),
     "session_file": ("--session-file", "SEESAW_SESSION_FILE"),

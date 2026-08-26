@@ -7,17 +7,14 @@ originals, not the lossy PDF/thumbnail export the web app offers.
 > so this tool signs in with your own credentials and uses the same private endpoints the
 > web app does. Use it at your own risk, and keep the default rate limits.
 
-## Status
-
-Work in progress. See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and the
-slice-by-slice plan.
+See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and the reverse-engineering
+notes.
 
 - [x] Config resolution (flag → env → `.env` → default) and login
 - [x] `--list-only`
 - [x] `--since`
 - [x] `--all`
-- [x] `--skip-existing`
-- [ ] Docker packaging
+- [x] skip-existing (the default)
 
 ## Install
 
@@ -63,7 +60,7 @@ seesaw-dl download --list-only --since 30d
 An absolute date covers the **whole** of that day; `30d` is a rolling window from now.
 Both are interpreted in your local timezone, matching the folder layout and EXIF stamps.
 
-Then download for real. `--skip-existing` is the default, so re-running is cheap:
+Then download for real. Files already on disk are skipped, so re-running is cheap:
 
 ```bash
 seesaw-dl download --out ~/Seesaw
@@ -72,6 +69,9 @@ seesaw-dl download --out ~/Seesaw
 ```bash
 seesaw-dl download --out ~/Seesaw --all
 ```
+
+`--all` re-fetches everything, ignoring what is already on disk; `--no-all` restores the
+default, which is useful if `SEESAW_DOWNLOAD_ALL` is set in your `.env`.
 
 Files land as `<Child>/<year>/<YYYY-MM-DD>/`, with a `.json` sidecar per post holding its
 caption, class and timestamp:
@@ -94,8 +94,7 @@ in that order. See `.env.example`.
 | Password | `--password` | `SEESAW_PASSWORD` | `login` only | — |
 | Output dir | `--out` | `SEESAW_OUTPUT_DIR` | unless `--list-only` | — |
 | List only | `--list-only` | `SEESAW_LIST_ONLY` | no | `false` |
-| Download all | `--all` | `SEESAW_DOWNLOAD_ALL` | no | `false` |
-| Skip existing | `--skip-existing/--no-skip-existing` | `SEESAW_SKIP_EXISTING` | no | `true` |
+| Download all | `--all/--no-all` | `SEESAW_DOWNLOAD_ALL` | no | `false` (skip existing) |
 | Since | `--since` | `SEESAW_SINCE` | no | unset |
 | Concurrency | `--concurrency` | `SEESAW_CONCURRENCY` | no | `4` |
 | Session cache | `--session-file` | `SEESAW_SESSION_FILE` | no | `~/.config/seesaw-dl/session.json` |
@@ -126,6 +125,25 @@ its EXIF `UserComment` rather than passing the time off as camera truth.
 Browsing Seesaw in a web browser marks posts as read. This tool only ever issues `GET`
 requests and never calls `item/update_seen_state_v2`, so downloading leaves your unread
 state alone.
+
+## Why there is no Docker image
+
+Seesaw protects family sign-in with a reCAPTCHA, which needs a real browser and a real
+person. A container can supply neither, so an image would ship a tool whose very first
+command could never run inside it. Install the package instead.
+
+(If you want containerised *downloads* specifically, the shape works: run `login` on a
+host, mount the resulting `session.json` read-only, and run `download` in the container —
+it needs no browser and no password. That is not built or supported here.)
+
+## Development
+
+```bash
+uv pip install -e ".[dev]"
+uv run pytest -q
+uv run ruff check .
+uv run mypy src
+```
 
 ## License
 

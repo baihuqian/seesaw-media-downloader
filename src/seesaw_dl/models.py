@@ -79,7 +79,7 @@ class MediaAsset:
     """One downloadable file.
 
     ``asset_id`` is the storage path Seesaw serves the file from (for example
-    ``us-2/f/8/a/9/8/9/f8a98958-...jpg``). Download URLs carry an expiring signature, so
+    ``us-2/a/b/c/d/e/f/1a2b3c4d-...jpg``). Download URLs carry an expiring signature, so
     the path -- not the URL -- is what the manifest keys on.
     """
 
@@ -234,7 +234,7 @@ def _asset_id(url: str) -> str:
 
     ``https://assets.seesaw.me/us-2/f/8/.../x.jpg:::1786762368:::1209600:::1:::<sig>``
     becomes ``us-2/f/8/.../x.jpg`` -- identical across re-signings, which is what makes
-    ``--skip-existing`` reliable.
+    skip-existing reliable.
     """
     match = _ASSET_PATH.match(url)
     if not match:
@@ -247,7 +247,7 @@ def _kind_for(asset_id: str) -> str:
 
 
 def _short(item_id: str) -> str:
-    """``item.adae0438-83d5-...`` -> ``adae0438``."""
+    """``item.1a2b3c4d-5e6f-...`` -> ``1a2b3c4d``."""
     tail = item_id.split(".", 1)[-1]
     return tail.split("-", 1)[0] or tail
 

@@ -6,7 +6,7 @@ media URLs constantly, so the URL is not an identity.
 
 The manifest is a convenience, not the truth: a file the user deleted is not "present"
 just because the manifest says so, and a file that exists with the right size is treated
-as present even if the manifest was lost. That keeps ``--skip-existing`` honest in both
+as present even if the manifest was lost. That keeps skip-existing honest in both
 directions.
 """
 

@@ -104,10 +104,9 @@ def download(
         None, "--list-only/--no-list-only", help="Show what would be downloaded; write nothing."
     ),
     download_all: bool | None = typer.Option(
-        None, "--all/--no-all", help="Fetch everything, including files already present."
-    ),
-    skip_existing: bool | None = typer.Option(
-        None, "--skip-existing/--no-skip-existing", help="Skip files already downloaded."
+        None,
+        "--all/--no-all",
+        help="Re-fetch everything, including files already downloaded (default: skip them).",
     ),
     since: str | None = typer.Option(
         None, "--since", help="Only posts on or after this date (YYYY-MM-DD, or e.g. 30d)."
@@ -128,7 +127,6 @@ def download(
         output_dir=out,
         list_only=list_only,
         download_all=download_all,
-        skip_existing=skip_existing,
         since=since,
         concurrency=concurrency,
         session_file=session_file,
@@ -152,13 +150,9 @@ def download(
             + (f", into {output_dir}" if output_dir else "")
         )
 
-        # --all re-fetches everything, so presence is not consulted at all.
+        # Skipping what is already on disk is the default; --all is the only opposite.
         manifest = Manifest.load(output_dir) if output_dir else None
-        is_present = (
-            None
-            if settings.download_all or manifest is None
-            else manifest.has
-        )
+        is_present = manifest.has if (manifest and not settings.download_all) else None
 
         with SeesawClient(session, reporter) as client:
             plan = build_plan(client, reporter, since=since_at, is_present=is_present)
