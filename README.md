@@ -13,7 +13,7 @@ Work in progress. See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and 
 slice-by-slice plan.
 
 - [x] Config resolution (flag → env → `.env` → default) and login
-- [ ] `--list-only`
+- [x] `--list-only`
 - [ ] `--since`
 - [ ] `--all`
 - [ ] `--skip-existing`
@@ -29,8 +29,25 @@ uv run playwright install chromium
 
 ## Usage
 
+Sign in once — this is the **only** command that opens a browser:
+
 ```bash
 seesaw-dl login
+```
+
+Seesaw protects family sign-in with a reCAPTCHA, so the browser opens with your
+credentials prefilled and you complete the challenge yourself. The session is then cached
+(`~/.config/seesaw-dl/session.json`, `0600`) and reused indefinitely — until Seesaw
+rejects it, at which point you are told to run `login` again.
+
+Everything after that is non-interactive and needs no credentials at all:
+
+```bash
+seesaw-dl download --list-only
+```
+
+```bash
+seesaw-dl download --list-only --json
 ```
 
 Configuration comes from a CLI flag, an environment variable, a `.env` file, or a default —
@@ -38,8 +55,8 @@ in that order. See `.env.example`.
 
 | Input | Flag | Env var | Required? | Default |
 |---|---|---|---|---|
-| Email | `--email` | `SEESAW_EMAIL` | yes | — |
-| Password | `--password` | `SEESAW_PASSWORD` | yes | — |
+| Email | `--email` | `SEESAW_EMAIL` | `login` only | — |
+| Password | `--password` | `SEESAW_PASSWORD` | `login` only | — |
 | Output dir | `--out` | `SEESAW_OUTPUT_DIR` | unless `--list-only` | — |
 | List only | `--list-only` | `SEESAW_LIST_ONLY` | no | `false` |
 | Download all | `--all` | `SEESAW_DOWNLOAD_ALL` | no | `false` |
@@ -51,6 +68,13 @@ in that order. See `.env.example`.
 | Log level | `--log-level` | `SEESAW_LOG_LEVEL` | no | `info` |
 
 Your password is never logged, and the session cache is written with `0600` permissions.
+`download` never reads your password — only the cached session.
+
+## What it does not do
+
+Browsing Seesaw in a web browser marks posts as read. This tool only ever issues `GET`
+requests and never calls `item/update_seen_state_v2`, so downloading leaves your unread
+state alone.
 
 ## License
 

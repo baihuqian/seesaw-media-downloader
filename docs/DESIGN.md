@@ -14,10 +14,29 @@ Everything after that — feed pagination and media downloads — runs over plai
 material. This is much faster than DOM driving and far less brittle than parsing the SPA's
 markup (the approach prior art takes).
 
-### What we know about Seesaw's private API
+### Seesaw's private API, as observed live
 
-- Same-origin JSON API under `https://app.seesaw.me/api/...`
-  (observed live: `/api/app/features`, `/api/app/location_data`).
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/person/parent/dashboard_v3` | The parent, plus `parent.children.objects[]` |
+| `GET /api/person/parent/child_classes?child_id=` | `{"objects": [...]}` — active *and* archived classes |
+| `GET /api/person/parent/class_feed?child_id=&class_id=&limit=&start_key=` | Journal items; cursor pagination via `items.last_key` → `start_key` |
+| `GET /api/item_v2?item_id=` | The **full** item, with every page |
+
+**The feed only ever returns page one of a multi-page item.** An item reporting
+`num_pages: 2` still arrives with a single page object, so anything multi-page must be
+re-fetched through `item_v2`. This is the same gap that makes Seesaw's own export lossy,
+and a feed-only implementation would silently reproduce it.
+
+Media lives at `assets.seesaw.me` behind a signed URL whose tail (`:::ts:::ttl:::1:::sig`)
+is re-issued over time. The **storage path** is therefore the stable identity used for the
+manifest, not the URL. `imaging.seesaw.me` URLs are display renditions and are only ever a
+last resort.
+
+Sign-in is gated by reCAPTCHA (`POST /api/auth/login` → `{"recaptcha_required": true}`),
+so `login` is interactive by necessity and every other command is not.
+
+- Same-origin JSON API under `https://app.seesaw.me/api/...`.
 - Requests carry session cookies plus an `_xsrf` token, and the housekeeping params
   `_bundle`, `_release` (e.g. `prod_2026-08-25.3`) and `_tz_offset`.
 - Nothing about this is documented or supported. When it changes, the client raises
@@ -33,10 +52,12 @@ markup (the approach prior art takes).
 | `logging.py` | Level-aware reporter. Redaction is literal-first: known secret values are registered and blanked, rather than pattern-scrubbing prose. |
 | `auth.py` | `SessionStore` (`0600` cache) and the Playwright login, incl. `--headful`. |
 | `errors.py` | The deliberate exception types. |
-| `discovery.py` | *(slice 1)* Captures the family-feed endpoint from real traffic. |
-| `api.py` / `models.py` | *(slice 1)* Authenticated HTTP client and feed models. |
-| `planner.py` | *(slice 1+)* Turns mode flags + manifest into a download plan. |
+| `api.py` | Read-only HTTP client over the endpoints above, with retries and `ApiContractError` on shape changes. |
+| `models.py` | `Child`, `SchoolClass`, `FeedItem`, `MediaAsset` — narrow views over wide payloads. |
+| `planner.py` | Walks every child and class into a `Plan`; the single source of truth for `--list-only` and downloads alike. |
+| `render.py` | Table and newline-delimited JSON rendering of a plan. |
 | `downloader.py` | *(slice 3)* Async downloads, atomic writes, sidecars. |
+| — | Endpoint discovery turned out to be unnecessary: the endpoints are stable constants in `api.py`, and a change surfaces as `ApiContractError` rather than being silently guessed at. |
 | `manifest.py` | *(slice 3+)* `manifest.json` index backing `--skip-existing`. |
 
 ## Output layout

@@ -24,9 +24,10 @@ ROLE_PICKER_URL = "https://app.seesaw.me/"
 FEED_URL = "https://app.seesaw.me/#/family/feed"
 ORIGIN = "https://app.seesaw.me"
 
-# A session is treated as stale after this long even if the cookies claim otherwise;
-# a cheap re-login beats a confusing mid-run 401.
-SESSION_MAX_AGE_SECONDS = 12 * 60 * 60
+# Sessions are kept for as long as Seesaw honours them. Signing in needs a human (see
+# RECAPTCHA_MESSAGE), so guessing at an expiry and throwing a working session away would
+# force needless manual logins. `download` reuses whatever is cached and only reports a
+# problem when the API itself rejects it.
 
 RECAPTCHA_MESSAGE = (
     "Seesaw answered the sign-in with a reCAPTCHA challenge, so it cannot be completed "
@@ -57,8 +58,9 @@ class Session:
             if cookie.get("domain", "").endswith("seesaw.me")
         }
 
-    def is_fresh(self, max_age: float = SESSION_MAX_AGE_SECONDS) -> bool:
-        return (time.time() - self.created_at) < max_age
+    @property
+    def age_seconds(self) -> float:
+        return max(0.0, time.time() - self.created_at)
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -230,8 +232,6 @@ def login_with_playwright(
         for c in state.get("cookies", [])
         if c.get("domain", "").endswith("seesaw.me")
     }
-    for value in cookies.values():
-        register_secret(value)
     session = Session(
         storage_state=dict(state),
         xsrf=_extract_xsrf(cookies),
@@ -239,6 +239,7 @@ def login_with_playwright(
         release=release,
         observed_api=observed,
     )
+    _register(session)
     reporter.debug(
         f"captured session (release={release or 'unknown'}, {len(observed)} api calls seen)"
     )
@@ -339,19 +340,55 @@ def get_session(
     force: bool = False,
     headful: bool = False,
 ) -> Session:
-    """Return a usable session, reusing the cache when it is still fresh."""
+    """Return a session for the ``login`` command, reusing the cache unless forced.
+
+    This is the only path that may open a browser.
+    """
     if not force:
         cached = store.load(email)
         if cached is not None:
-            register_secret(cached.xsrf)
-            for value in cached.cookies.values():
-                register_secret(value)
-        if cached is not None and cached.is_fresh():
-            reporter.debug(f"reusing cached session from {store.path}")
+            _register(cached)
+            reporter.debug(
+                f"reusing cached session from {store.path} "
+                f"(age {cached.age_seconds / 3600:.1f}h)"
+            )
             return cached
-        if cached is not None:
-            reporter.debug("cached session is stale; signing in again")
     session = login_with_playwright(email, password, reporter, headful=headful)
     store.save(session)
     reporter.debug(f"session cached at {store.path} (0600)")
     return session
+
+
+NO_SESSION_MESSAGE = (
+    "No cached Seesaw session was found.\n"
+    "Run `seesaw-dl login` first -- it opens a browser once, you sign in, and the session "
+    "is reused by every later run."
+)
+
+SESSION_REJECTED_MESSAGE = (
+    "Seesaw rejected the cached session, so it has expired or been revoked.\n"
+    "Run `seesaw-dl login` again to refresh it."
+)
+
+
+def load_session(store: SessionStore, reporter: Reporter) -> Session:
+    """Load the cached session for a non-interactive command.
+
+    Never opens a browser: signing in requires a human, so commands that download simply
+    report what the user needs to run.
+    """
+    session = store.load()
+    if session is None:
+        raise AuthError(NO_SESSION_MESSAGE)
+    _register(session)
+    reporter.debug(
+        f"using cached session for {session.email} from {store.path} "
+        f"(age {session.age_seconds / 3600:.1f}h)"
+    )
+    return session
+
+
+def _register(session: Session) -> None:
+    register_secret(session.xsrf)
+    for value in session.cookies.values():
+        register_secret(value)

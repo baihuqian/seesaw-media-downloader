@@ -1,0 +1,20 @@
+{
+ "status": "OK",
+ "response": {
+  "parent": {
+   "person_id": "person.e4712596-0000-4000-8000-000000000000",
+   "display_name": "Sam Rivera",
+   "email": "family@example.com",
+   "children": {
+    "objects": [
+     {
+      "person_id": "person.ddc9e669-0000-4000-8000-000000000000",
+      "first_name": "Alex",
+      "last_name": "Rivera",
+      "display_name": "Alex Rivera"
+     }
+    ]
+   }
+  }
+ }
+}

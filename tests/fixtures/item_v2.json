@@ -1,0 +1,41 @@
+{
+ "status": "OK",
+ "response": {
+  "item": {
+   "obj_type": "item",
+   "item_id": "item.61743f7b-0000-4000-8000-000000000000",
+   "class_id": "class.2e7d2c03-0000-4000-8000-000000000000",
+   "create_date": 1787692822.4114704,
+   "class_name": "SY26-27 - HOMEROOM - Nguyen - B101XY",
+   "primary_item_type": "collection",
+   "num_pages": 2,
+   "caption": "Look what we built today!",
+   "pages": {
+    "objects": [
+     {
+      "obj_type": "item_page",
+      "item_page_id": "item_page.5feceb66-0000-4000-8000-000000000000",
+      "composite_image_id": "us-2/0/a/b/c/d/e/5feceb66ffc8.jpg|||bucket",
+      "composite_image_url": "https://assets.seesaw.me/us-2/0/a/b/c/d/e/5feceb66ffc8.jpg:::1786762368:::1209600:::1:::SIGNATURE",
+      "composite_image_resizable_url": "https://imaging.seesaw.me/?url=http%3A%2F%2Fbucket%2F0.jpg",
+      "composite_image_size": {
+       "width": 661,
+       "height": 496
+      }
+     },
+     {
+      "obj_type": "item_page",
+      "item_page_id": "item_page.6b86b273-0000-4000-8000-000000000000",
+      "composite_image_id": "us-2/1/a/b/c/d/e/6b86b273ff34.jpg|||bucket",
+      "composite_image_url": "https://assets.seesaw.me/us-2/1/a/b/c/d/e/6b86b273ff34.jpg:::1786762368:::1209600:::1:::SIGNATURE",
+      "composite_image_resizable_url": "https://imaging.seesaw.me/?url=http%3A%2F%2Fbucket%2F1.jpg",
+      "composite_image_size": {
+       "width": 357,
+       "height": 496
+      }
+     }
+    ]
+   }
+  }
+ }
+}
