@@ -18,13 +18,23 @@ from typing import Any
 from .errors import AuthError
 from .logging import Reporter, register_secret
 
-LOGIN_URL = "https://app.seesaw.me/#/login?role=family"
+# The role in the URL is "parent", even though the UI calls it "Family Member".
+LOGIN_URL = "https://app.seesaw.me/#/login?role=parent"
+ROLE_PICKER_URL = "https://app.seesaw.me/"
 FEED_URL = "https://app.seesaw.me/#/family/feed"
 ORIGIN = "https://app.seesaw.me"
 
 # A session is treated as stale after this long even if the cookies claim otherwise;
 # a cheap re-login beats a confusing mid-run 401.
 SESSION_MAX_AGE_SECONDS = 12 * 60 * 60
+
+RECAPTCHA_MESSAGE = (
+    "Seesaw answered the sign-in with a reCAPTCHA challenge, so it cannot be completed "
+    "automatically.\n"
+    "Run `seesaw-dl login --headful`: a browser window opens with your email and password "
+    "already filled in, you solve the challenge and sign in yourself, and the session is "
+    "then cached so later runs need no browser at all."
+)
 
 
 @dataclass
@@ -142,6 +152,11 @@ def login_with_playwright(
 
     release: str | None = None
     observed: list[str] = []
+    recaptcha_required = False
+
+    if headful:
+        # A person has to read, click and possibly solve a challenge.
+        timeout_ms = max(timeout_ms, 5 * 60_000)
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=not headful)
@@ -158,21 +173,50 @@ def login_with_playwright(
             if url not in observed:
                 observed.append(url)
 
+        def _watch_login(response: Any) -> None:
+            nonlocal recaptcha_required
+            if "/api/auth/login" not in response.url:
+                return
+            try:
+                body = response.json()
+            except Exception:  # noqa: BLE001 - a non-JSON body tells us nothing
+                return
+            payload = body.get("response") or {}
+            if payload.get("recaptcha_required"):
+                recaptcha_required = True
+                reporter.debug("login response asked for a reCAPTCHA")
+
         page.on("request", _observe)
+        page.on("response", _watch_login)
 
         reporter.debug(f"opening {LOGIN_URL}")
         page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=timeout_ms)
 
         if headful:
-            reporter.info("Complete the sign-in in the browser window; waiting for the feed...")
+            # Prefill what we can; the human only needs to solve the challenge and submit.
+            try:
+                _fill_login_form(page, email, password, reporter, timeout_ms, submit=False)
+            except AuthError as exc:
+                reporter.debug(f"could not prefill the form: {exc}")
+            reporter.info(
+                "A browser window is open with your credentials filled in. "
+                "Complete the sign-in (including any reCAPTCHA) -- waiting for the feed..."
+            )
         else:
             _fill_login_form(page, email, password, reporter, timeout_ms)
 
         try:
-            page.wait_for_url("**/family/**", timeout=timeout_ms)
+            # Seesaw routes families to a hash route under #/family/ (and has used
+            # #/parent/ historically), so accept either.
+            page.wait_for_url(
+                lambda url: "/family/" in url or "/parent/" in url.split("#", 1)[-1],
+                timeout=timeout_ms,
+            )
         except PWTimeout as exc:
             _dump_state(page, reporter)
             browser.close()
+            if recaptcha_required:
+                raise AuthError(RECAPTCHA_MESSAGE) from exc
             raise AuthError(
                 "Sign-in did not reach the family feed. Check the email and password, or "
                 "re-run `seesaw-dl login --headful` to sign in manually."
@@ -202,7 +246,12 @@ def login_with_playwright(
 
 
 def _fill_login_form(
-    page: Any, email: str, password: str, reporter: Reporter, timeout_ms: int
+    page: Any,
+    email: str,
+    password: str,
+    reporter: Reporter,
+    timeout_ms: int,
+    submit: bool = True,
 ) -> None:
     """Fill the family email/password form.
 
@@ -212,16 +261,28 @@ def _fill_login_form(
     from playwright.sync_api import TimeoutError as PWTimeout
 
     email_selectors = [
+        "#sign_in_email",
         "input[type='email']",
         "input[name='email']",
         "input[placeholder*='mail' i]",
     ]
     password_selectors = [
+        "#sign_in_password",
         "input[type='password']",
         "input[name='password']",
     ]
 
     email_box = _first_visible(page, email_selectors, timeout_ms)
+    if email_box is None:
+        # Deep-linking to the role can be ignored on a cold load, which drops us on the
+        # role picker instead. Pick "I'm a Family Member" and look again.
+        reporter.debug("no email field yet; trying the role picker")
+        try:
+            page.get_by_role("button", name="Family Member").click(timeout=10_000)
+            page.wait_for_timeout(1_000)
+        except Exception as exc:  # noqa: BLE001 - any failure here means the same thing
+            reporter.debug(f"role picker not usable: {exc}")
+        email_box = _first_visible(page, email_selectors, timeout_ms)
     if email_box is None:
         raise AuthError(
             "Could not find the email field on the Seesaw sign-in page. "
@@ -236,12 +297,15 @@ def _fill_login_form(
             "Run `seesaw-dl login --headful` to sign in manually."
         )
     password_box.fill(password)
-    reporter.debug("submitting sign-in form")
+    if not submit:
+        return
 
+    reporter.debug("submitting sign-in form")
+    button = page.get_by_role("button", name="Family Member Sign In").first
     try:
-        password_box.press("Enter")
+        button.click(timeout=10_000)
     except PWTimeout:  # pragma: no cover - defensive
-        page.get_by_role("button", name="Sign In").click()
+        password_box.press("Enter")
 
 
 def _first_visible(page: Any, selectors: list[str], timeout_ms: int) -> Any | None:
