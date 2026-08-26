@@ -1,0 +1,34 @@
+# Secrets and local state
+.env
+.env.*
+!.env.example
+session.json
+*.session.json
+.seesaw-dl/
+
+# Output
+out/
+output/
+downloads/
+
+# Recorded API payloads that have not been redacted
+tests/fixtures/raw/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,75 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "seesaw-media-downloader"
+version = "0.1.0"
+description = "Download photos, videos and PDFs from your Seesaw family feed."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+authors = [{ name = "seesaw-media-downloader contributors" }]
+keywords = ["seesaw", "downloader", "cli", "backup"]
+classifiers = [
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "typer>=0.12",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "httpx>=0.27",
+    "playwright>=1.45",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",
+    "ruff>=0.5",
+    "mypy>=1.10",
+]
+
+[project.scripts]
+seesaw-dl = "seesaw_dl.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/USER/seesaw-media-downloader"
+Issues = "https://github.com/USER/seesaw-media-downloader/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/seesaw_dl"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
+# UP042: str+Enum is deliberate -- Typer and pydantic-settings both parse it from
+# plain strings, which enum.StrEnum only gives us on 3.11+ with extra shims.
+ignore = ["UP042"]
+
+[tool.ruff.lint.per-file-ignores]
+# B008: `x: T = typer.Option(...)` in the signature is Typer's documented idiom.
+"src/seesaw_dl/cli.py" = ["B008"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+files = ["src"]
+
+[[tool.mypy.overrides]]
+module = ["playwright.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
