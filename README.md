@@ -70,6 +70,18 @@ in that order. See `.env.example`.
 Your password is never logged, and the session cache is written with `0600` permissions.
 `download` never reads your password — only the cached session.
 
+## Timestamps
+
+Seesaw strips EXIF from the media it serves, so downloads would otherwise import into
+Apple Photos, Immich or Lightroom in download order instead of chronological order. Every
+download is stamped: JPEGs get EXIF `DateTimeOriginal` (with a UTC offset) and the caption
+in `ImageDescription`; every file gets its modification time set. The image data itself is
+never re-encoded.
+
+The stamp is the **post date** — Seesaw's API exposes no capture date at all, so a photo
+posted a week after it was taken carries the post time. Each file records that caveat in
+its EXIF `UserComment` rather than passing the time off as camera truth.
+
 ## What it does not do
 
 Browsing Seesaw in a web browser marks posts as read. This tool only ever issues `GET`

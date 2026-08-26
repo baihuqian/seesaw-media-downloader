@@ -60,6 +60,33 @@ so `login` is interactive by necessity and every other command is not.
 | — | Endpoint discovery turned out to be unnecessary: the endpoints are stable constants in `api.py`, and a change surfaces as `ApiContractError` rather than being silently guessed at. |
 | `manifest.py` | *(slice 3+)* `manifest.json` index backing `--skip-existing`. |
 
+## Timestamps and photo libraries
+
+Seesaw serves **re-encoded composites with no EXIF whatsoever** — verified on live
+downloads, where a JPEG arrives carrying only JFIF and ICC segments. Left alone, those
+files import into Apple Photos, Immich or Lightroom in *download* order rather than in the
+order the moments happened, because those libraries sort on EXIF `DateTimeOriginal` and
+fall back to file mtime.
+
+`metadata.py` therefore stamps every download:
+
+| File type | What gets set |
+|---|---|
+| JPEG | `DateTimeOriginal`, `DateTimeDigitized`, `DateTime`, plus `OffsetTime*` so the time is not naive; `ImageDescription` gets the caption; and the file mtime. |
+| Everything else (video, PDF, PNG) | File mtime only — the fallback every library uses. |
+
+EXIF is *inserted*, never re-encoded: the compressed image data is byte-identical before
+and after (there is a test pinning this).
+
+### The honest caveat
+
+The stamped time is the **post date**, not the capture date. Seesaw's API exposes no
+capture time anywhere: an item carries a single `create_date`, and the epoch embedded in a
+signed asset URL is the signature's issue time — its companion `1209600` is a 14-day TTL —
+not when the shutter fired. A photo posted days after it was taken therefore gets the post
+time. Rather than let that pass as camera truth, every stamped file says so in its EXIF
+`UserComment`.
+
 ## Output layout
 
 ```
