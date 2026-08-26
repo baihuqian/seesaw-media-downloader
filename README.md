@@ -15,8 +15,8 @@ slice-by-slice plan.
 - [x] Config resolution (flag → env → `.env` → default) and login
 - [x] `--list-only`
 - [x] `--since`
-- [ ] `--all`
-- [ ] `--skip-existing`
+- [x] `--all`
+- [x] `--skip-existing`
 - [ ] Docker packaging
 
 ## Install
@@ -62,6 +62,28 @@ seesaw-dl download --list-only --since 30d
 
 An absolute date covers the **whole** of that day; `30d` is a rolling window from now.
 Both are interpreted in your local timezone, matching the folder layout and EXIF stamps.
+
+Then download for real. `--skip-existing` is the default, so re-running is cheap:
+
+```bash
+seesaw-dl download --out ~/Seesaw
+```
+
+```bash
+seesaw-dl download --out ~/Seesaw --all
+```
+
+Files land as `<Child>/<year>/<YYYY-MM-DD>/`, with a `.json` sidecar per post holding its
+caption, class and timestamp:
+
+```
+~/Seesaw/
+  manifest.json
+  Alex Rivera/2026/2026-05-14/
+    2026-05-14T09-12-03_abcd1234_p1.jpg
+    2026-05-14T09-12-03_abcd1234_p2.jpg
+    2026-05-14T09-12-03_abcd1234.json
+```
 
 Configuration comes from a CLI flag, an environment variable, a `.env` file, or a default —
 in that order. See `.env.example`.

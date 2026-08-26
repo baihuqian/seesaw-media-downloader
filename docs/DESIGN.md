@@ -54,9 +54,9 @@ last resort.
 | `dates.py` | Parses `--since` (`YYYY-MM-DD` or `Nd`) into a local-time instant. |
 | `planner.py` | Walks every child and class into a `Plan`; the single source of truth for `--list-only` and downloads alike. |
 | `render.py` | Table and newline-delimited JSON rendering of a plan. |
-| `downloader.py` | *(slice 3)* Async downloads, atomic writes, sidecars. |
+| `downloader.py` | Bounded-concurrency async downloads, atomic writes, per-post sidecars, EXIF stamping on arrival. |
 | — | Endpoint discovery turned out to be unnecessary: the endpoints are stable constants in `api.py`, and a change surfaces as `ApiContractError` rather than being silently guessed at. |
-| `manifest.py` | *(slice 3+)* `manifest.json` index backing `--skip-existing`. |
+| `manifest.py` | `manifest.json` index backing `--skip-existing`. |
 
 ## Login and sessions
 
@@ -139,6 +139,25 @@ time. Rather than let that pass as camera truth, every stamped file says so in i
         2026-05-14T09-12-03_<postid>_1.jpg
         2026-05-14T09-12-03_<postid>.json
 ```
+
+## Downloading
+
+Assets stream to a `.part` file and are `os.replace`d into position only once complete and
+length-checked, so an interrupted run never leaves a half-written photo that a later
+`--skip-existing` would mistake for finished work. Concurrency is bounded (default 4) and
+transient failures back off and retry.
+
+### Sizes in the manifest
+
+The manifest records the size **on disk**, not the number of bytes Seesaw served. EXIF
+stamping happens after the download and grows the file by a few hundred bytes, so recording
+the served length would make every later presence check miss and re-download the whole
+library. The served length is kept separately as `source_size`, and `sha256` hashes the
+served bytes so it identifies the source rather than our stamped copy.
+
+The manifest is a convenience, not the truth: a file the user deleted is not present just
+because the index says so, and a file already sitting at the expected path (a restored
+backup, a lost manifest) is treated as present. `--all` ignores presence entirely.
 
 ## Secrets
 

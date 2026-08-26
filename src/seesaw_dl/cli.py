@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -12,8 +13,10 @@ from .api import SeesawClient
 from .auth import SessionStore, get_session, load_session
 from .config import LogLevel, resolve_settings
 from .dates import describe, parse_since
+from .downloader import Report, run_downloads
 from .errors import SeesawError
 from .logging import Reporter, register_secret
+from .manifest import Manifest
 from .planner import build_plan
 from .render import plan_json, plan_table
 
@@ -149,8 +152,16 @@ def download(
             + (f", into {output_dir}" if output_dir else "")
         )
 
+        # --all re-fetches everything, so presence is not consulted at all.
+        manifest = Manifest.load(output_dir) if output_dir else None
+        is_present = (
+            None
+            if settings.download_all or manifest is None
+            else manifest.has
+        )
+
         with SeesawClient(session, reporter) as client:
-            plan = build_plan(client, reporter, since=since_at)
+            plan = build_plan(client, reporter, since=since_at, is_present=is_present)
     except SeesawError as exc:
         reporter.error(str(exc))
         raise typer.Exit(code=1) from exc
@@ -169,8 +180,51 @@ def download(
         )
         return
 
-    reporter.error("Downloading is not wired up yet -- use --list-only for now.")
-    raise typer.Exit(code=2)
+    assert output_dir is not None and manifest is not None  # require_output_dir guarantees it
+    try:
+        report = run_downloads(
+            plan,
+            output_dir,
+            manifest,
+            reporter,
+            concurrency=settings.concurrency,
+            cookies=session.cookies,
+        )
+    except SeesawError as exc:
+        reporter.error(str(exc))
+        raise typer.Exit(code=1) from exc
+
+    _summarise(report, output_dir, reporter, settings.json_output)
+    if report.failed:
+        raise typer.Exit(code=1)
+
+
+def _summarise(report: Report, output_dir: Path, reporter: Reporter, as_json: bool) -> None:
+    summary = {
+        "downloaded": len(report.downloaded),
+        "skipped": len(report.skipped),
+        "failed": len(report.failed),
+        "bytes": report.total_bytes,
+        "seconds": round(report.elapsed, 1),
+        "output_dir": str(output_dir),
+    }
+    if as_json:
+        typer.echo(json.dumps({"summary": summary}))
+        return
+    reporter.info(
+        f"Done: {summary['downloaded']} downloaded, {summary['skipped']} skipped, "
+        f"{summary['failed']} failed -> {output_dir} "
+        f"({_human(report.total_bytes)} in {report.elapsed:.1f}s)"
+    )
+
+
+def _human(size: int) -> str:
+    value = float(size)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} GB"
 
 
 def main() -> None:
