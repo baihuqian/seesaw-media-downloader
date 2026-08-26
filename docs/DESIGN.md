@@ -33,9 +33,6 @@ is re-issued over time. The **storage path** is therefore the stable identity us
 manifest, not the URL. `imaging.seesaw.me` URLs are display renditions and are only ever a
 last resort.
 
-Sign-in is gated by reCAPTCHA (`POST /api/auth/login` → `{"recaptcha_required": true}`),
-so `login` is interactive by necessity and every other command is not.
-
 - Same-origin JSON API under `https://app.seesaw.me/api/...`.
 - Requests carry session cookies plus an `_xsrf` token, and the housekeeping params
   `_bundle`, `_release` (e.g. `prod_2026-08-25.3`) and `_tz_offset`.
@@ -59,6 +56,33 @@ so `login` is interactive by necessity and every other command is not.
 | `downloader.py` | *(slice 3)* Async downloads, atomic writes, sidecars. |
 | — | Endpoint discovery turned out to be unnecessary: the endpoints are stable constants in `api.py`, and a change surfaces as `ApiContractError` rather than being silently guessed at. |
 | `manifest.py` | *(slice 3+)* `manifest.json` index backing `--skip-existing`. |
+
+## Login and sessions
+
+Seesaw gates family sign-in behind a **reCAPTCHA**. Confirmed live: `POST /api/auth/login`
+returns `200` with `{"recaptcha_required": true}` even for correct credentials. Fully
+headless login is therefore not achievable, and defeating the check is out of scope. The
+CLI splits cleanly along that line.
+
+**`login` is the only command that opens a browser.** It goes to `#/login?role=parent` —
+the URL says *parent* even though the UI says *Family Member*, and a cold load can still
+land on the role picker, which is handled by clicking through it. The email and password
+are prefilled from flag/env/`.env`, and the "Family Member Sign In" button is clicked
+(pressing Enter does not submit). A headless attempt runs first; when the login response
+comes back asking for a reCAPTCHA, it fails with a message naming `--headful` instead of a
+vague timeout. Under `--headful` the window opens prefilled, the user solves the challenge
+and submits, and we wait for the family feed before capturing the session.
+
+**Sessions are persisted and reused indefinitely.** The captured storage state (cookies)
+and `_xsrf` are written atomically to `~/.config/seesaw-dl/session.json` at `0600`. There
+is deliberately **no expiry guess**: because re-login needs a human, throwing a working
+session away on a timer would force needless manual sign-ins. The session is used until
+Seesaw itself rejects it, at which point a `401`/`403` becomes "run `seesaw-dl login`
+again".
+
+**Every other command is non-interactive.** `download` calls `load_session()`, which never
+launches a browser and never reads the password — with no cached session it explains what
+to run and exits non-zero. A repeat `login` reuses the cache and returns in about a second.
 
 ## Timestamps and photo libraries
 
