@@ -41,8 +41,8 @@ dev = [
 seesaw-dl = "seesaw_dl.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/USER/seesaw-media-downloader"
-Issues = "https://github.com/USER/seesaw-media-downloader/issues"
+Homepage = "https://github.com/baihuqian/seesaw-media-downloader"
+Issues = "https://github.com/baihuqian/seesaw-media-downloader/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/seesaw_dl"]
