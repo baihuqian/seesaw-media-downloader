@@ -167,6 +167,15 @@ uv run ruff check .
 uv run mypy src
 ```
 
+Coverage is measured with branch coverage and fails below 85%:
+
+```bash
+uv run pytest -q --cov --cov-report=term-missing
+```
+
+`auth.py` is excluded — it drives a real browser through Playwright and cannot run without
+a human and a reCAPTCHA.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
