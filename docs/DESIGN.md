@@ -52,7 +52,7 @@ last resort.
 | `api.py` | Read-only HTTP client over the endpoints above, with retries and `ApiContractError` on shape changes. |
 | `models.py` | `Child`, `SchoolClass`, `FeedItem`, `MediaAsset` — narrow views over wide payloads. |
 | `dates.py` | Parses `--since` (`YYYY-MM-DD` or `Nd`) into a local-time instant. |
-| `planner.py` | Resolves the one child a run covers, then walks that child's classes into a `Plan`; the single source of truth for `--list-only` and downloads alike. |
+| `planner.py` | Resolves the one child a run covers, then walks that child's classes into a `Plan`; the single source of truth for `list` and `download` alike. |
 | `render.py` | Table and newline-delimited JSON rendering of a plan. |
 | `downloader.py` | Bounded-concurrency async downloads, atomic writes, per-post sidecars, EXIF stamping on arrival. |
 | — | Endpoint discovery turned out to be unnecessary: the endpoints are stable constants in `api.py`, and a change surfaces as `ApiContractError` rather than being silently guessed at. |
@@ -136,6 +136,44 @@ signed asset URL is the signature's issue time — its companion `1209600` is a 
 not when the shutter fired. A photo posted days after it was taken therefore gets the post
 time. Rather than let that pass as camera truth, every stamped file says so in its EXIF
 `UserComment`.
+
+## Three commands, no mode flags
+
+`login`, `list` and `download` are separate commands rather than one command with a
+`--list-only` switch. The switch was the wrong shape twice over.
+
+It made a *required* option conditional: `--out` was mandatory unless `--list-only` was
+passed, which needed a `writes_files` property on `Settings` and a ternary at the call
+site to express. A flag that changes which other options are required is usually a second
+command in disguise. Split apart, each command's contract is unconditional — `download`
+always needs an output directory, `list` never does.
+
+And listing is not a dry run. `--dry-run` earns its keep when what you want is the write
+operation rehearsed, so parity with the real invocation is the point. Reading the feed is
+something you want for its own sake: what is in there, what is new since last month, piped
+to `jq`. That is a command, not a rehearsal.
+
+This follows the same reasoning that removed `--no-skip-existing` as a synonym for
+`--all`: one spelling per behaviour.
+
+### Keeping them from drifting
+
+The real cost of splitting is that the two commands can fall out of step — and a listing
+is only worth anything if it shows exactly what a download would fetch. Two things hold
+that together, both structural rather than a matter of remembering:
+
+- The shared options (`--child`, `--since`, `--session-file`, `--json`, `--log-level`) are
+  defined **once** as module-level constants in `cli.py` and referenced by both commands.
+- Both call one internal `_plan_run()` helper for everything they do identically: load the
+  session, resolve the child, build the plan. They diverge only in what they do with the
+  plan afterwards.
+
+A test asserts that every shared flag appears in both `--help` outputs, so adding an option
+to one command and forgetting the other fails the suite.
+
+`list` still accepts an optional `--out`. It writes nothing there; it reads the manifest to
+fill in the "Have?" column, which is what lets the listing answer "what is new?" rather
+than just "what exists?".
 
 ## One child per run
 

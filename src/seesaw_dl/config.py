@@ -51,7 +51,6 @@ class Settings(BaseSettings):
     output_dir: Path | None = None
 
     # Modes
-    list_only: bool = False
     # Skipping what is already downloaded is the default and has no flag of its own:
     # `--all` (or `--no-all`) is the single, unambiguous way to control it.
     download_all: bool = False
@@ -84,11 +83,6 @@ class Settings(BaseSettings):
             return value.expanduser()
         return value
 
-    @property
-    def writes_files(self) -> bool:
-        """``--list-only`` never touches disk, so it does not need an output directory."""
-        return not self.list_only
-
     def require_credentials(self) -> tuple[str, str]:
         """Return ``(email, password)``, reporting *all* missing credentials at once."""
         missing = [
@@ -113,7 +107,6 @@ _SOURCES: dict[str, tuple[str, str]] = {
     "password": ("--password", "SEESAW_PASSWORD"),
     "child": ("--child", "SEESAW_CHILD"),
     "output_dir": ("--out", "SEESAW_OUTPUT_DIR"),
-    "list_only": ("--list-only", "SEESAW_LIST_ONLY"),
     "download_all": ("--all/--no-all", "SEESAW_DOWNLOAD_ALL"),
     "since": ("--since", "SEESAW_SINCE"),
     "concurrency": ("--concurrency", "SEESAW_CONCURRENCY"),

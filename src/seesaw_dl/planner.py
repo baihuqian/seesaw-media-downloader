@@ -1,7 +1,7 @@
 """Turning the feed into a concrete plan.
 
-The plan is the single source of truth shared by ``--list-only`` and a real download, so
-what the listing shows is exactly what a download would fetch.
+The plan is the single source of truth shared by ``list`` and ``download``, so what the
+listing shows is exactly what a download would fetch.
 """
 
 from __future__ import annotations

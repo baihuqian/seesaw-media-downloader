@@ -10,14 +10,14 @@ import typer
 
 from . import __version__
 from .api import SeesawClient
-from .auth import SessionStore, get_session, load_session
-from .config import LogLevel, resolve_settings
+from .auth import Session, SessionStore, get_session, load_session
+from .config import LogLevel, Settings, resolve_settings
 from .dates import describe, parse_since
 from .downloader import Report, run_downloads
 from .errors import SeesawError
 from .logging import Reporter, register_secret
 from .manifest import Manifest
-from .planner import build_plan, resolve_child
+from .planner import Plan, build_plan, resolve_child
 from .render import plan_json, plan_table
 
 app = typer.Typer(
@@ -44,6 +44,22 @@ def main_callback(
     ),
 ) -> None:
     """Seesaw family media downloader."""
+
+
+# Options shared by `list` and `download`, defined once so the two commands cannot drift.
+# That drift is the one real risk in having them separate: a listing is only useful if it
+# shows exactly what a download would fetch, which means both must take the same inputs.
+_CHILD = typer.Option(
+    None, "--child", help="Which child. Required when the account has more than one."
+)
+_SINCE = typer.Option(
+    None, "--since", help="Only posts on or after this date (YYYY-MM-DD, or e.g. 30d)."
+)
+_SESSION_FILE = typer.Option(None, "--session-file", help="Where the session is cached.")
+_JSON = typer.Option(None, "--json/--no-json", help="Machine-readable output.")
+_LOG_LEVEL = typer.Option(
+    None, "--log-level", help="error | warn | info | debug (default: info)."
+)
 
 
 @app.command()
@@ -98,43 +114,63 @@ def login(
         reporter.info("More than one child: pick one per run with `download --child <name>`.")
 
 
+@app.command("list")
+def list_media(
+    child: str | None = _CHILD,
+    out: Path | None = typer.Option(
+        None,
+        "--out",
+        help="Optional: an existing download directory, to report what is already there.",
+    ),
+    since: str | None = _SINCE,
+    session_file: Path | None = _SESSION_FILE,
+    json_output: bool | None = _JSON,
+    log_level: LogLevel | None = _LOG_LEVEL,
+) -> None:
+    """Show what is in the feed. Writes nothing.
+
+    `--out` is optional and only affects reporting: point it at an existing download and
+    the listing gains a "Have?" column, which is what makes it answer "what is new?".
+    """
+    settings = resolve_settings(
+        child=child,
+        output_dir=out,
+        since=since,
+        session_file=session_file,
+        json_output=json_output,
+        log_level=log_level,
+    )
+    reporter = Reporter(settings.log_level, json_output=settings.json_output)
+    output_dir = settings.output_dir
+
+    plan, _, _ = _plan_run(settings, reporter, output_dir, mode="list")
+
+    # Presence is only meaningful once we have somewhere to look.
+    _render(plan, reporter, settings.json_output, include_presence=output_dir is not None)
+    reporter.info(
+        f"Would download: {len(plan.to_download)} assets ({plan.present_count} already present)"
+    )
+
+
 @app.command()
 def download(
-    child: str | None = typer.Option(
-        None,
-        "--child",
-        help="Which child to download. Required when the account has more than one.",
-    ),
-    out: Path | None = typer.Option(
-        None, "--out", help="Directory to download into. Not needed with --list-only."
-    ),
-    list_only: bool | None = typer.Option(
-        None, "--list-only/--no-list-only", help="Show what would be downloaded; write nothing."
-    ),
+    child: str | None = _CHILD,
+    out: Path | None = typer.Option(None, "--out", help="Directory to download into."),
     download_all: bool | None = typer.Option(
         None,
         "--all/--no-all",
         help="Re-fetch everything, including files already downloaded (default: skip them).",
     ),
-    since: str | None = typer.Option(
-        None, "--since", help="Only posts on or after this date (YYYY-MM-DD, or e.g. 30d)."
-    ),
+    since: str | None = _SINCE,
     concurrency: int | None = typer.Option(None, "--concurrency", help="Parallel downloads."),
-    session_file: Path | None = typer.Option(
-        None, "--session-file", help="Where the session is cached."
-    ),
-    json_output: bool | None = typer.Option(
-        None, "--json/--no-json", help="Machine-readable output."
-    ),
-    log_level: LogLevel | None = typer.Option(
-        None, "--log-level", help="error | warn | info | debug (default: info)."
-    ),
+    session_file: Path | None = _SESSION_FILE,
+    json_output: bool | None = _JSON,
+    log_level: LogLevel | None = _LOG_LEVEL,
 ) -> None:
     """Download journal media, reusing the session cached by `seesaw-dl login`."""
     settings = resolve_settings(
         child=child,
         output_dir=out,
-        list_only=list_only,
         download_all=download_all,
         since=since,
         concurrency=concurrency,
@@ -145,47 +181,16 @@ def download(
     reporter = Reporter(settings.log_level, json_output=settings.json_output)
 
     try:
-        output_dir = settings.output_dir if settings.list_only else settings.require_output_dir()
-        # Distinct name: `since` is the raw CLI string, `since_at` the resolved instant.
-        since_at = parse_since(settings.since)
-        store = SessionStore(settings.session_file)
-        session = load_session(store, reporter)
-
-        reporter.info(f"Signed in as {session.email} (cached session)")
-        reporter.info(
-            "Mode: "
-            + ("list-only" if settings.list_only else "download")
-            + f", {describe(since_at)}"
-            + (f", into {output_dir}" if output_dir else "")
-        )
-
-        # Skipping what is already on disk is the default; --all is the only opposite.
-        manifest = Manifest.load(output_dir) if output_dir else None
-        is_present = manifest.has if (manifest and not settings.download_all) else None
-
-        with SeesawClient(session, reporter) as client:
-            selected = resolve_child(client, reporter, settings.child)
-            reporter.info(f"Child: {selected.display_name}")
-            plan = build_plan(client, reporter, selected, since=since_at, is_present=is_present)
+        output_dir = settings.require_output_dir()
     except SeesawError as exc:
         reporter.error(str(exc))
         raise typer.Exit(code=1) from exc
 
-    # Presence is only meaningful once we have somewhere to look.
-    include_presence = output_dir is not None
+    plan, manifest, session = _plan_run(settings, reporter, output_dir, mode="download")
+    assert manifest is not None  # an output directory always yields one
 
-    if settings.json_output:
-        typer.echo(plan_json(plan, include_presence))
-    else:
-        reporter.print_raw(plan_table(plan, include_presence))
+    _render(plan, reporter, settings.json_output, include_presence=True)
 
-    if settings.list_only:
-        reporter.info(
-            f"Would download: {len(plan.to_download)} assets ({plan.present_count} already present)"
-        )
-        return
-
-    assert output_dir is not None and manifest is not None  # require_output_dir guarantees it
     try:
         report = run_downloads(
             plan,
@@ -202,6 +207,47 @@ def download(
     _summarise(report, output_dir, reporter, settings.json_output)
     if report.failed:
         raise typer.Exit(code=1)
+
+
+def _plan_run(
+    settings: Settings, reporter: Reporter, output_dir: Path | None, mode: str
+) -> tuple[Plan, Manifest | None, Session]:
+    """Everything `list` and `download` do identically: session, child, plan.
+
+    Keeping this in one place is what guarantees a listing shows exactly what a download
+    would fetch -- the two commands differ only in what they do with the plan afterwards.
+    """
+    try:
+        # Distinct name: `since` is the raw CLI string, `since_at` the resolved instant.
+        since_at = parse_since(settings.since)
+        store = SessionStore(settings.session_file)
+        session = load_session(store, reporter)
+
+        reporter.info(f"Signed in as {session.email} (cached session)")
+        reporter.info(
+            f"Mode: {mode}, {describe(since_at)}"
+            + (f", into {output_dir}" if output_dir else "")
+        )
+
+        # Skipping what is already on disk is the default; --all is the only opposite.
+        manifest = Manifest.load(output_dir) if output_dir else None
+        is_present = manifest.has if (manifest and not settings.download_all) else None
+
+        with SeesawClient(session, reporter) as client:
+            selected = resolve_child(client, reporter, settings.child)
+            reporter.info(f"Child: {selected.display_name}")
+            plan = build_plan(client, reporter, selected, since=since_at, is_present=is_present)
+    except SeesawError as exc:
+        reporter.error(str(exc))
+        raise typer.Exit(code=1) from exc
+    return plan, manifest, session
+
+
+def _render(plan: Plan, reporter: Reporter, as_json: bool, include_presence: bool) -> None:
+    if as_json:
+        typer.echo(plan_json(plan, include_presence))
+    else:
+        reporter.print_raw(plan_table(plan, include_presence))
 
 
 def _summarise(report: Report, output_dir: Path, reporter: Reporter, as_json: bool) -> None:

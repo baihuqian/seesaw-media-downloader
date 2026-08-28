@@ -11,7 +11,7 @@ See [docs/DESIGN.md](docs/DESIGN.md) for the architecture and the reverse-engine
 notes.
 
 - [x] Config resolution (flag → env → `.env` → default) and login
-- [x] `--list-only`
+- [x] `list`
 - [x] `--since`
 - [x] `--all`
 - [x] skip-existing (the default)
@@ -37,24 +37,32 @@ credentials prefilled and you complete the challenge yourself. The session is th
 (`~/.config/seesaw-dl/session.json`, `0600`) and reused indefinitely — until Seesaw
 rejects it, at which point you are told to run `login` again.
 
-Everything after that is non-interactive and needs no credentials at all:
+Everything after that is non-interactive and needs no credentials at all. `list` reads the
+feed and writes nothing:
 
 ```bash
-seesaw-dl download --list-only
+seesaw-dl list
 ```
 
 ```bash
-seesaw-dl download --list-only --json
+seesaw-dl list --json
 ```
 
 Limit the window to recent posts — either an absolute date or a number of days back:
 
 ```bash
-seesaw-dl download --list-only --since 2026-01-31
+seesaw-dl list --since 2026-01-31
 ```
 
 ```bash
-seesaw-dl download --list-only --since 30d
+seesaw-dl list --since 30d
+```
+
+Give `list` an `--out` and it also reports what you already have, which is how you see
+what is new:
+
+```bash
+seesaw-dl list --since 30d --out ~/Seesaw
 ```
 
 An absolute date covers the **whole** of that day; `30d` is a rolling window from now.
@@ -93,8 +101,7 @@ in that order. See `.env.example`.
 | Email | `--email` | `SEESAW_EMAIL` | `login` only | — |
 | Password | `--password` | `SEESAW_PASSWORD` | `login` only | — |
 | Child | `--child` | `SEESAW_CHILD` | if the account has >1 child | — |
-| Output dir | `--out` | `SEESAW_OUTPUT_DIR` | unless `--list-only` | — |
-| List only | `--list-only` | `SEESAW_LIST_ONLY` | no | `false` |
+| Output dir | `--out` | `SEESAW_OUTPUT_DIR` | `download` only | — |
 | Download all | `--all/--no-all` | `SEESAW_DOWNLOAD_ALL` | no | `false` (skip existing) |
 | Since | `--since` | `SEESAW_SINCE` | no | unset |
 | Concurrency | `--concurrency` | `SEESAW_CONCURRENCY` | no | `4` |
