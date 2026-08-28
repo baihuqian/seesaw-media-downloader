@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 
 from seesaw_dl import cli
 from seesaw_dl.auth import Session
-from seesaw_dl.models import FeedItem
+from seesaw_dl.models import Child, FeedItem
 from seesaw_dl.planner import Plan, PlannedAsset
 
 runner = CliRunner()
@@ -37,7 +37,12 @@ def fake_backend(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     def fake_load_session(store: Any, reporter: Any) -> Session:
         return Session(storage_state={"cookies": []}, xsrf="x", email="family@example.com")
 
-    def fake_build_plan(client: Any, reporter: Any, **kwargs: Any) -> Plan:
+    def fake_resolve_child(client: Any, reporter: Any, wanted: str | None) -> Child:
+        captured["child"] = wanted
+        return Child(person_id="person.1", display_name="Alex Rivera")
+
+    def fake_build_plan(client: Any, reporter: Any, child: Child, **kwargs: Any) -> Plan:
+        captured["planned_for"] = child.display_name
         captured["is_present"] = kwargs.get("is_present")
         captured["since"] = kwargs.get("since")
         return plan
@@ -57,6 +62,7 @@ def fake_backend(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
     monkeypatch.setattr(cli, "load_session", fake_load_session)
     monkeypatch.setattr(cli, "build_plan", fake_build_plan)
+    monkeypatch.setattr(cli, "resolve_child", fake_resolve_child)
     monkeypatch.setattr(cli, "SeesawClient", FakeClient)
     monkeypatch.setattr(cli, "run_downloads", fake_run_downloads)
     return captured
@@ -66,6 +72,22 @@ def test_list_only_needs_no_output_dir(fake_backend: dict[str, Any]) -> None:
     result = runner.invoke(cli.app, ["download", "--list-only"])
     assert result.exit_code == 0
     assert fake_backend["downloaded"] is False
+
+
+def test_child_flag_reaches_the_resolver(fake_backend: dict[str, Any]) -> None:
+    result = runner.invoke(cli.app, ["download", "--list-only", "--child", "Robin"])
+    assert result.exit_code == 0
+    assert fake_backend["child"] == "Robin"
+    assert fake_backend["planned_for"] == "Alex Rivera"  # whatever the resolver returned
+
+
+def test_child_env_var_is_used_when_the_flag_is_absent(
+    fake_backend: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SEESAW_CHILD", "Robin")
+    result = runner.invoke(cli.app, ["download", "--list-only"])
+    assert result.exit_code == 0
+    assert fake_backend["child"] == "Robin"
 
 
 def test_download_without_output_dir_is_refused(fake_backend: dict[str, Any]) -> None:

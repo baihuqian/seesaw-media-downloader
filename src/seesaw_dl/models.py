@@ -57,6 +57,22 @@ class Child:
         )
         return cls(person_id=person_id, display_name=name or person_id)
 
+    def matches(self, token: str) -> bool:
+        """Does ``token`` name this child?
+
+        Deliberately generous, because the caller resolves ambiguity: an exact person id,
+        the full display name in any case, or a substring of it all match. Two children
+        matching the same token is a question for the user, not something to guess at.
+        """
+        wanted = token.strip().casefold()
+        if not wanted:
+            return False
+        return (
+            token.strip() == self.person_id
+            or wanted == self.display_name.casefold()
+            or wanted in self.display_name.casefold()
+        )
+
 
 @dataclass(frozen=True)
 class SchoolClass:
@@ -106,9 +122,14 @@ class MediaAsset:
         return f"{stamp}_{_short(self.item_id)}_p{self.page_index + 1}{self.extension}"
 
     def relative_path(self) -> PurePosixPath:
-        """``<Child>/<year>/<YYYY-MM-DD>/<filename>``."""
+        """``<year>/<YYYY-MM-DD>/<filename>``.
+
+        The child's name is not in the path: a run covers exactly one child, so repeating
+        it on every file would be noise. It stays in the sidecar and the manifest, which
+        is where something reading the archive back would look for it.
+        """
         day = self.created_at.strftime("%Y-%m-%d")
-        return PurePosixPath(_safe(self.child_name), day[:4], day, self.filename)
+        return PurePosixPath(day[:4], day, self.filename)
 
 
 @dataclass
