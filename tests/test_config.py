@@ -17,7 +17,6 @@ def test_defaults_when_nothing_supplied() -> None:
     settings = resolve_settings()
     assert settings.email is None
     assert settings.output_dir is None
-    assert settings.list_only is False
     assert settings.download_all is False
     assert settings.since is None
     assert settings.concurrency == 4
@@ -83,14 +82,10 @@ def test_missing_credentials_names_flag_and_env() -> None:
     assert "--password" in message and "SEESAW_PASSWORD" in message
 
 
-def test_output_dir_required_only_when_writing(tmp_path: Path) -> None:
-    listing = resolve_settings(list_only=True)
-    assert listing.writes_files is False
-
-    downloading = resolve_settings(list_only=False)
-    assert downloading.writes_files is True
+def test_output_dir_is_required_for_download(tmp_path: Path) -> None:
+    """`list` reads settings.output_dir directly; only `download` demands one."""
     with pytest.raises(ConfigError) as excinfo:
-        downloading.require_output_dir()
+        resolve_settings().require_output_dir()
     assert "--out" in str(excinfo.value) and "SEESAW_OUTPUT_DIR" in str(excinfo.value)
 
     assert resolve_settings(output_dir=tmp_path).require_output_dir() == tmp_path

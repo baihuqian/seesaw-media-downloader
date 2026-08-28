@@ -31,6 +31,7 @@ dependencies = [
 dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
     "respx>=0.21",
     "pillow>=10.3",   # generates genuine JPEGs for the metadata tests
     "ruff>=0.5",
@@ -75,3 +76,24 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["src/seesaw_dl"]
+branch = true
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "@overload",
+]
+# auth.py drives a real browser through Playwright: it cannot be exercised without a
+# human and a reCAPTCHA, and leaving it in only buries the number for the code the suite
+# can actually reach. `cli.login` is deliberately NOT omitted -- it is thin enough to be
+# worth testing one day, and hiding it would hide that.
+omit = ["src/seesaw_dl/auth.py"]
+
+# Below the current figure, so a genuine regression trips it without the number becoming
+# a target to be gamed upward.
+fail_under = 85

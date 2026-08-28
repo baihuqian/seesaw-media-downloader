@@ -25,6 +25,10 @@ jobs:
       # A UTC runner once passed locally and failed here: timezone-dependent behaviour
       # only shows up when the zone is not the developer's. Run a second, offset zone.
       - run: TZ=Asia/Kolkata uv run pytest -q
+      # Coverage on one version only: the figure does not vary by interpreter, and
+      # running it three times would just slow the matrix down.
+      - if: matrix.python == '3.12'
+        run: uv run pytest -q --cov --cov-report=term-missing
 
   build:
     runs-on: ubuntu-latest

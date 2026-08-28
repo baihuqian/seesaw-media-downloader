@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import typer.main
 from typer.testing import CliRunner
 
 from seesaw_dl import cli
@@ -68,14 +69,48 @@ def fake_backend(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     return captured
 
 
-def test_list_only_needs_no_output_dir(fake_backend: dict[str, Any]) -> None:
-    result = runner.invoke(cli.app, ["download", "--list-only"])
+def test_list_needs_no_output_dir(fake_backend: dict[str, Any]) -> None:
+    result = runner.invoke(cli.app, ["list"])
     assert result.exit_code == 0
     assert fake_backend["downloaded"] is False
 
 
+def test_list_only_flag_is_gone(fake_backend: dict[str, Any], tmp_path: Path) -> None:
+    """It was a subcommand wearing a flag; `list` is the one spelling."""
+    result = runner.invoke(cli.app, ["download", "--out", str(tmp_path), "--list-only"])
+    assert result.exit_code != 0
+
+
+def test_list_writes_nothing_even_with_out(fake_backend: dict[str, Any], tmp_path: Path) -> None:
+    """`--out` on `list` is for the "Have?" column only -- it must never download."""
+    result = runner.invoke(cli.app, ["list", "--out", str(tmp_path)])
+    assert result.exit_code == 0
+    assert fake_backend["downloaded"] is False
+    assert fake_backend["is_present"] is not None  # presence still consulted
+
+
+def _flags(command_name: str) -> set[str]:
+    """The option strings a command actually accepts.
+
+    Read from the parsed command rather than its rendered --help: help text is wrapped to
+    the terminal width, so grepping it fails on a narrow terminal even when the flag is
+    there.
+    """
+    group = typer.main.get_command(cli.app)
+    command = group.commands[command_name]  # type: ignore[attr-defined]
+    return {opt for param in command.params for opt in param.opts if opt.startswith("--")}
+
+
+def test_list_and_download_share_their_options() -> None:
+    """The drift risk in splitting them: a listing must accept what a download accepts."""
+    shared = {"--child", "--since", "--session-file", "--json", "--log-level", "--out"}
+    listing, downloading = _flags("list"), _flags("download")
+    assert shared <= listing, f"missing from `list`: {sorted(shared - listing)}"
+    assert shared <= downloading, f"missing from `download`: {sorted(shared - downloading)}"
+
+
 def test_child_flag_reaches_the_resolver(fake_backend: dict[str, Any]) -> None:
-    result = runner.invoke(cli.app, ["download", "--list-only", "--child", "Robin"])
+    result = runner.invoke(cli.app, ["list", "--child", "Robin"])
     assert result.exit_code == 0
     assert fake_backend["child"] == "Robin"
     assert fake_backend["planned_for"] == "Alex Rivera"  # whatever the resolver returned
@@ -85,7 +120,7 @@ def test_child_env_var_is_used_when_the_flag_is_absent(
     fake_backend: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("SEESAW_CHILD", "Robin")
-    result = runner.invoke(cli.app, ["download", "--list-only"])
+    result = runner.invoke(cli.app, ["list"])
     assert result.exit_code == 0
     assert fake_backend["child"] == "Robin"
 
@@ -134,6 +169,14 @@ def test_bad_since_fails_without_touching_the_network(
     result = runner.invoke(cli.app, ["download", "--out", str(tmp_path), "--since", "nope"])
     assert result.exit_code == 1
     assert fake_backend["downloaded"] is False
+
+
+def test_list_json_is_parseable(fake_backend: dict[str, Any]) -> None:
+    result = runner.invoke(cli.app, ["list", "--json"])
+    assert result.exit_code == 0
+    lines = [line for line in result.output.splitlines() if line.startswith("{")]
+    assert lines and all(json.loads(line) for line in lines)
+    assert "summary" in json.loads(lines[-1])
 
 
 def test_json_mode_emits_parseable_output(
