@@ -17,7 +17,7 @@ from .downloader import Report, run_downloads
 from .errors import SeesawError
 from .logging import Reporter, register_secret
 from .manifest import Manifest
-from .planner import build_plan
+from .planner import build_plan, resolve_child
 from .render import plan_json, plan_table
 
 app = typer.Typer(
@@ -93,10 +93,18 @@ def login(
         return
     names = ", ".join(child.display_name for child in children) or "none found"
     reporter.info(f"Children: {names}")
+    if len(children) > 1:
+        # A download covers one child, so this is where the user learns the names to pass.
+        reporter.info("More than one child: pick one per run with `download --child <name>`.")
 
 
 @app.command()
 def download(
+    child: str | None = typer.Option(
+        None,
+        "--child",
+        help="Which child to download. Required when the account has more than one.",
+    ),
     out: Path | None = typer.Option(
         None, "--out", help="Directory to download into. Not needed with --list-only."
     ),
@@ -124,6 +132,7 @@ def download(
 ) -> None:
     """Download journal media, reusing the session cached by `seesaw-dl login`."""
     settings = resolve_settings(
+        child=child,
         output_dir=out,
         list_only=list_only,
         download_all=download_all,
@@ -155,7 +164,9 @@ def download(
         is_present = manifest.has if (manifest and not settings.download_all) else None
 
         with SeesawClient(session, reporter) as client:
-            plan = build_plan(client, reporter, since=since_at, is_present=is_present)
+            selected = resolve_child(client, reporter, settings.child)
+            reporter.info(f"Child: {selected.display_name}")
+            plan = build_plan(client, reporter, selected, since=since_at, is_present=is_present)
     except SeesawError as exc:
         reporter.error(str(exc))
         raise typer.Exit(code=1) from exc

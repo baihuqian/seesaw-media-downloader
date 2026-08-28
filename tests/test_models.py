@@ -46,7 +46,8 @@ def test_filename_and_layout() -> None:
     asset = item.assets()[0]
     path = asset.relative_path()
     day = asset.created_at.strftime("%Y-%m-%d")
-    assert path.parts == ("Alex Rivera", day[:4], day, asset.filename)
+    # No child folder: a run covers one child, so the name would repeat on every file.
+    assert path.parts == (day[:4], day, asset.filename)
     assert asset.filename.startswith(day)
     assert asset.filename.endswith("_1a2b3c4d_p1.jpg")
 

@@ -52,7 +52,7 @@ last resort.
 | `api.py` | Read-only HTTP client over the endpoints above, with retries and `ApiContractError` on shape changes. |
 | `models.py` | `Child`, `SchoolClass`, `FeedItem`, `MediaAsset` — narrow views over wide payloads. |
 | `dates.py` | Parses `--since` (`YYYY-MM-DD` or `Nd`) into a local-time instant. |
-| `planner.py` | Walks every child and class into a `Plan`; the single source of truth for `--list-only` and downloads alike. |
+| `planner.py` | Resolves the one child a run covers, then walks that child's classes into a `Plan`; the single source of truth for `--list-only` and downloads alike. |
 | `render.py` | Table and newline-delimited JSON rendering of a plan. |
 | `downloader.py` | Bounded-concurrency async downloads, atomic writes, per-post sidecars, EXIF stamping on arrival. |
 | — | Endpoint discovery turned out to be unnecessary: the endpoints are stable constants in `api.py`, and a change surfaces as `ApiContractError` rather than being silently guessed at. |
@@ -137,17 +137,49 @@ not when the shutter fired. A photo posted days after it was taken therefore get
 time. Rather than let that pass as camera truth, every stamped file says so in its EXIF
 `UserComment`.
 
+## One child per run
+
+A run covers exactly one child, chosen with `--child` (or `SEESAW_CHILD`). When the account
+has a single child there is nothing to ask and the flag is optional; with more than one the
+run **stops and lists the names** instead of picking. Guessing would be the wrong failure
+mode here: the cost of downloading the wrong child is a large, slow, silently misfiled
+archive, while the cost of stopping is one flag.
+
+Matching is deliberately generous — full display name, any substring of it, or the person
+id, all case-insensitive — because the *caller* resolves ambiguity. A token matching two
+children is an error asking for a full name, never a silent pick of the first.
+
+This is also what lets the child's name leave the output path. The two changes are one
+decision: a path without a name is only unambiguous if a run cannot mix children.
+
 ## Output layout
 
 ```
 <out>/
   manifest.json
-  <Child Name>/
-    2026/
-      2026-05-14/
-        2026-05-14T09-12-03_<postid>_1.jpg
-        2026-05-14T09-12-03_<postid>.json
+  2026/
+    2026-05-14/
+      2026-05-14T09-12-03_<postid>_1.jpg
+      2026-05-14T09-12-03_<postid>.json
 ```
+
+The year is the top level and the child's name appears nowhere in the path. Repeating one
+name on every file of a single-child run is noise, and it makes the tree awkward to merge
+with an existing photo library organised by date. The name is still recorded per post in
+the `.json` sidecar, which is where a reader would look for it.
+
+Point each child at its own `--out` directory. Nothing enforces that — two children sharing
+one directory is legal and simply interleaves them in the same date folders, distinguishable
+only by reading sidecars.
+
+### Upgrading from the `<Child>/<year>/…` layout
+
+`Manifest.has()` trusts the path it recorded before the one it would compute, so files
+downloaded under the old layout stay recognised as present and are not re-fetched — new
+posts simply start landing at the new location, leaving a mixed tree. To consolidate, move
+the contents of the child folder up one level and let the next run re-fetch: the manifest
+entries then point at paths that no longer exist, which is exactly the condition presence
+checking is designed to notice.
 
 ## Downloading
 

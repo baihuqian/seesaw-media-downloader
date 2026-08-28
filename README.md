@@ -73,13 +73,13 @@ seesaw-dl download --out ~/Seesaw --all
 `--all` re-fetches everything, ignoring what is already on disk; `--no-all` restores the
 default, which is useful if `SEESAW_DOWNLOAD_ALL` is set in your `.env`.
 
-Files land as `<Child>/<year>/<YYYY-MM-DD>/`, with a `.json` sidecar per post holding its
-caption, class and timestamp:
+Files land as `<year>/<YYYY-MM-DD>/`, with a `.json` sidecar per post holding its
+caption, class, child and timestamp:
 
 ```
 ~/Seesaw/
   manifest.json
-  Alex Rivera/2026/2026-05-14/
+  2026/2026-05-14/
     2026-05-14T09-12-03_abcd1234_p1.jpg
     2026-05-14T09-12-03_abcd1234_p2.jpg
     2026-05-14T09-12-03_abcd1234.json
@@ -92,6 +92,7 @@ in that order. See `.env.example`.
 |---|---|---|---|---|
 | Email | `--email` | `SEESAW_EMAIL` | `login` only | — |
 | Password | `--password` | `SEESAW_PASSWORD` | `login` only | — |
+| Child | `--child` | `SEESAW_CHILD` | if the account has >1 child | — |
 | Output dir | `--out` | `SEESAW_OUTPUT_DIR` | unless `--list-only` | — |
 | List only | `--list-only` | `SEESAW_LIST_ONLY` | no | `false` |
 | Download all | `--all/--no-all` | `SEESAW_DOWNLOAD_ALL` | no | `false` (skip existing) |
@@ -103,6 +104,20 @@ in that order. See `.env.example`.
 
 Your password is never logged, and the session cache is written with `0600` permissions.
 `download` never reads your password — only the cached session.
+
+## One child per run
+
+A run downloads exactly one child. With a single child on the account there is nothing to
+choose and `--child` is optional; with more than one, the run stops and lists the names
+rather than guessing:
+
+```bash
+seesaw-dl download --out ~/Seesaw/robin --child "Robin Rivera"
+```
+
+`--child` accepts a full name, any unique part of one (`Robin`), or a person id; matching
+ignores case. Give each child its own `--out` directory — the child's name is no longer in
+the path, so two children sharing one directory would interleave in the same date folders.
 
 ## Timestamps
 

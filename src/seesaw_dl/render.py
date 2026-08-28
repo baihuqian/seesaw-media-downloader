@@ -30,7 +30,7 @@ def asset_record(entry: PlannedAsset, include_presence: bool) -> dict[str, Any]:
 def plan_table(plan: Plan, include_presence: bool) -> Table:
     table = Table(show_lines=False, header_style="bold")
     table.add_column("Date", no_wrap=True)
-    table.add_column("Child")
+    # No Child column: a run covers one child, so it would be the same on every row.
     table.add_column("Kind", no_wrap=True)
     table.add_column("Pg", justify="right", no_wrap=True)
     table.add_column("Destination")
@@ -41,7 +41,6 @@ def plan_table(plan: Plan, include_presence: bool) -> Table:
         asset = entry.asset
         row = [
             asset.created_at.strftime("%Y-%m-%d %H:%M"),
-            asset.child_name,
             asset.kind,
             str(asset.page_index + 1),
             str(asset.relative_path()),

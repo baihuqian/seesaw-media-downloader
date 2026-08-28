@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     email: str | None = None
     password: str | None = None
 
+    # Scope
+    # A run covers exactly one child; this picks which, and is only required when the
+    # account has more than one.
+    child: str | None = None
+
     # Output
     output_dir: Path | None = None
 
@@ -61,7 +66,7 @@ class Settings(BaseSettings):
     )
     log_level: LogLevel = LogLevel.info
 
-    @field_validator("email", "password", "since", mode="before")
+    @field_validator("email", "password", "since", "child", mode="before")
     @classmethod
     def _blank_to_none(cls, value: Any) -> Any:
         if isinstance(value, str) and not value.strip():
@@ -106,6 +111,7 @@ _SOURCES: dict[str, tuple[str, str]] = {
     # field name -> (CLI flag, environment variable)
     "email": ("--email", "SEESAW_EMAIL"),
     "password": ("--password", "SEESAW_PASSWORD"),
+    "child": ("--child", "SEESAW_CHILD"),
     "output_dir": ("--out", "SEESAW_OUTPUT_DIR"),
     "list_only": ("--list-only", "SEESAW_LIST_ONLY"),
     "download_all": ("--all/--no-all", "SEESAW_DOWNLOAD_ALL"),

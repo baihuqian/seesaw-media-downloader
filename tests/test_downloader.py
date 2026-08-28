@@ -50,7 +50,7 @@ def reporter() -> Reporter:
 
 
 @respx.mock
-def test_downloads_into_child_year_date_layout(tmp_path: Path, reporter: Reporter) -> None:
+def test_downloads_into_year_date_layout(tmp_path: Path, reporter: Reporter) -> None:
     respx.get(url__startswith="https://assets.seesaw.me").mock(
         return_value=httpx.Response(200, content=jpeg_bytes())
     )
@@ -60,7 +60,7 @@ def test_downloads_into_child_year_date_layout(tmp_path: Path, reporter: Reporte
     assert len(report.downloaded) == 1
     landed = report.downloaded[0].path
     assert landed is not None
-    assert landed.relative_to(tmp_path).parts[:3] == ("Alex Rivera", "2026", "2026-05-14")
+    assert landed.relative_to(tmp_path).parts[:2] == ("2026", "2026-05-14")
     assert landed.exists()
 
 
