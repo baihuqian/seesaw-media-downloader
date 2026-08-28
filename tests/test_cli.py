@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import typer.main
 from typer.testing import CliRunner
 
 from seesaw_dl import cli
@@ -88,14 +89,24 @@ def test_list_writes_nothing_even_with_out(fake_backend: dict[str, Any], tmp_pat
     assert fake_backend["is_present"] is not None  # presence still consulted
 
 
+def _flags(command_name: str) -> set[str]:
+    """The option strings a command actually accepts.
+
+    Read from the parsed command rather than its rendered --help: help text is wrapped to
+    the terminal width, so grepping it fails on a narrow terminal even when the flag is
+    there.
+    """
+    group = typer.main.get_command(cli.app)
+    command = group.commands[command_name]  # type: ignore[attr-defined]
+    return {opt for param in command.params for opt in param.opts if opt.startswith("--")}
+
+
 def test_list_and_download_share_their_options() -> None:
     """The drift risk in splitting them: a listing must accept what a download accepts."""
     shared = {"--child", "--since", "--session-file", "--json", "--log-level", "--out"}
-    listing = runner.invoke(cli.app, ["list", "--help"]).output
-    downloading = runner.invoke(cli.app, ["download", "--help"]).output
-    for flag in shared:
-        assert flag in listing, f"{flag} missing from `list`"
-        assert flag in downloading, f"{flag} missing from `download`"
+    listing, downloading = _flags("list"), _flags("download")
+    assert shared <= listing, f"missing from `list`: {sorted(shared - listing)}"
+    assert shared <= downloading, f"missing from `download`: {sorted(shared - downloading)}"
 
 
 def test_child_flag_reaches_the_resolver(fake_backend: dict[str, Any]) -> None:
