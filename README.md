@@ -20,9 +20,13 @@ notes.
 
 ```bash
 uv venv --python 3.12
-uv pip install -e ".[dev]"
+uv pip install -e ".[dev,login]"
 uv run playwright install chromium
 ```
+
+Playwright lives in a `login` extra because only `seesaw-dl login` drives a browser.
+Downloading needs neither it nor Chromium — which is what makes the Docker image below
+small, and what stops it from being able to log in.
 
 ## Usage
 
@@ -148,15 +152,58 @@ Browsing Seesaw in a web browser marks posts as read. This tool only ever issues
 requests and never calls `item/update_seen_state_v2`, so downloading leaves your unread
 state alone.
 
-## Why there is no Docker image
+## Run in Docker
 
-Seesaw protects family sign-in with a reCAPTCHA, which needs a real browser and a real
-person. A container can supply neither, so an image would ship a tool whose very first
-command could never run inside it. Install the package instead.
+Signing in still happens on the host — Seesaw protects family sign-in with a reCAPTCHA,
+which needs a real browser and a real person. But sessions stay valid for a long time, so
+once you have one, downloads run unattended in a container that has no browser, no
+password, and no way to log in: the image omits the `login` extra entirely.
 
-(If you want containerised *downloads* specifically, the shape works: run `login` on a
-host, mount the resulting `session.json` read-only, and run `download` in the container —
-it needs no browser and no password. That is not built or supported here.)
+```bash
+seesaw-dl login          # on the host, once
+docker compose run --rm seesaw
+```
+
+The container downloads and exits — there is nothing to keep running between runs.
+Schedule that command with cron, systemd or your NAS task scheduler rather than leaving a
+container up.
+
+Everything is configured with environment variables; [`docker-compose.yml`](docker-compose.yml)
+reads them from your shell or a `.env` beside it:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `TZ` | `UTC` | Timezone for the dated folders and EXIF stamps |
+| `SEESAW_OUTPUT_HOST_DIR` | `./out` | Host directory to download into |
+| `SEESAW_SESSION_HOST_FILE` | `~/.config/seesaw-dl/session.json` | Session written by `login` |
+| `PUID` / `PGID` | `1000` | User the container runs as |
+| `SEESAW_CHILD` | — | Required only if the account has more than one child |
+| `SEESAW_SINCE`, `SEESAW_DOWNLOAD_ALL`, `SEESAW_CONCURRENCY`, `SEESAW_LOG_LEVEL` | see [`.env.example`](.env.example) | Same meanings as the flags |
+
+The host `.env` is deliberately *not* passed in: it holds your password, and the container
+has no use for credentials it cannot log in with. The session file is mounted read-only,
+which is all `download` needs — it reads a session and never writes one.
+
+Flags still work, and `list` is available for a dry run:
+
+```bash
+docker compose run --rm seesaw download --since 30d
+docker compose run --rm seesaw list --since 30d
+```
+
+### On a NAS
+
+`PUID`/`PGID` must match the owner of your output share, or the files land unreadable — a
+Synology admin is typically `1026:100`, a QNAP user `1000:100`. Run `id` over SSH to
+check. The same user has to be able to read `session.json`, which `login` writes `0600`.
+
+```bash
+PUID=1026 PGID=100 TZ=America/Los_Angeles \
+  SEESAW_OUTPUT_HOST_DIR=/volume1/photo/Seesaw \
+  docker compose run --rm seesaw
+```
+
+`docker compose run --rm --user 1026:100 seesaw` overrides the user for a single run.
 
 ## Development
 
