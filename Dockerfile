@@ -22,6 +22,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends tzdata \
     && rm -rf /var/lib/apt/lists/*
 
+# Attaches the published package to this repository on GHCR, and tells anyone holding
+# only the image where it came from.
+LABEL org.opencontainers.image.source="https://github.com/baihuqian/seesaw-media-downloader"
+LABEL org.opencontainers.image.description="Download-only container for seesaw-media-downloader. Sign in on the host; mount the session."
+LABEL org.opencontainers.image.licenses="MIT"
+
 COPY --from=build /opt/venv /opt/venv
 
 ENV PATH="/opt/venv/bin:$PATH"
