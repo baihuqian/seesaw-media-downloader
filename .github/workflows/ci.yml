@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+    # Releases publish an immutable, pinnable image tag; main publishes `edge`.
+    tags: ["v*"]
   pull_request:
 
 jobs:
@@ -40,9 +42,22 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
+    # Nothing is published from a broken tree: the image is only pushed after the test
+    # matrix and the wheel build have passed.
+    needs: [check, build]
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
+
+      # arm64 is emulated only for the published manifest; the smoke tests below run on
+      # the native runner. A NAS or a Pi is exactly the machine this image is for.
+      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
+
+      # Build once for this runner's architecture and keep it locally, so the image that
+      # gets smoke-tested is a real image rather than a manifest reference.
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -50,6 +65,7 @@ jobs:
           tags: seesaw-media-downloader:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
       # An arbitrary uid with no /etc/passwd entry is what a NAS actually does, and it is
       # what would break `Path.home()` at import time if HOME were ever dropped.
       - run: docker run --rm --user 4242:4242 seesaw-media-downloader:ci --version
@@ -61,3 +77,54 @@ jobs:
             echo "::error::login unexpectedly ran inside the container"
             exit 1
           fi
+      # tzdata decides the dated folder layout and the EXIF stamps, so its absence would
+      # silently move every download to UTC rather than fail.
+      # tzdata decides the dated folder layout and the EXIF stamps, so its absence would
+      # silently move every download to UTC rather than fail. --entrypoint, because the
+      # image's entrypoint is `seesaw-dl` and not a shell.
+      - name: timezone database is present
+        run: |
+          offset=$(docker run --rm -e TZ=Asia/Kolkata --entrypoint python \
+            seesaw-media-downloader:ci \
+            -c "import datetime; print(datetime.datetime.now().astimezone().utcoffset())")
+          echo "TZ=Asia/Kolkata resolved to $offset"
+          test "$offset" = "5:30:00" || { echo "::error::tzdata missing or TZ ignored"; exit 1; }
+
+      # Everything below only runs on a push to main or a tag -- pull requests build and
+      # test the image but never publish it.
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        if: github.event_name != 'pull_request'
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          # `edge` tracks main; a `v1.2.3` tag also publishes `1.2`, `1` and `latest`.
+          tags: |
+            type=edge,branch=main
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,format=short
+
+      # Re-uses the layers built above; only the emulated arm64 half is new work.
+      - name: Build and push
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

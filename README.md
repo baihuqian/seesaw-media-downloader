@@ -164,6 +164,22 @@ seesaw-dl login          # on the host, once
 docker compose run --rm seesaw
 ```
 
+The image is published to GitHub Container Registry for `linux/amd64` and `linux/arm64`,
+so compose pulls it rather than building:
+
+```
+ghcr.io/baihuqian/seesaw-media-downloader:latest
+```
+
+`latest` and `0.2`/`0.2.0`-style tags come from releases; `edge` tracks `main`. Pin a
+version on anything unattended — set `SEESAW_IMAGE` to override the default, or build
+locally instead with `docker compose build`.
+
+```bash
+docker pull ghcr.io/baihuqian/seesaw-media-downloader:latest
+SEESAW_IMAGE=ghcr.io/baihuqian/seesaw-media-downloader:0.2.0 docker compose run --rm seesaw
+```
+
 The container downloads and exits — there is nothing to keep running between runs.
 Schedule that command with cron, systemd or your NAS task scheduler rather than leaving a
 container up.
@@ -177,6 +193,7 @@ reads them from your shell or a `.env` beside it:
 | `SEESAW_OUTPUT_HOST_DIR` | `./out` | Host directory to download into |
 | `SEESAW_SESSION_HOST_FILE` | `~/.config/seesaw-dl/session.json` | Session written by `login` |
 | `PUID` / `PGID` | `1000` | User the container runs as |
+| `SEESAW_IMAGE` | `ghcr.io/baihuqian/seesaw-media-downloader:latest` | Image to run; pin a version for unattended runs |
 | `SEESAW_CHILD` | — | Required only if the account has more than one child |
 | `SEESAW_SINCE`, `SEESAW_DOWNLOAD_ALL`, `SEESAW_CONCURRENCY`, `SEESAW_LOG_LEVEL` | see [`.env.example`](.env.example) | Same meanings as the flags |
 

@@ -6,8 +6,11 @@
 
 services:
   seesaw:
+    # Published for linux/amd64 and linux/arm64. Override with SEESAW_IMAGE to pin a
+    # version (`...:0.2.0`), track main (`...:edge`), or use a local build.
+    image: ${SEESAW_IMAGE:-ghcr.io/baihuqian/seesaw-media-downloader:latest}
+    # Only used by `docker compose build` / `run --build`; the default path is a pull.
     build: .
-    image: seesaw-media-downloader
     restart: "no"
 
     # Match the owner of the output share. A Synology admin is typically 1026:100, a QNAP
