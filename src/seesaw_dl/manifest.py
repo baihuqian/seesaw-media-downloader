@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from .models import MediaAsset
+from .paths import ensure_writable_dir
 
 MANIFEST_NAME = "manifest.json"
 VERSION = 1
@@ -76,7 +77,7 @@ class Manifest:
         return cls(root, entries)
 
     def save(self) -> None:
-        self.root.mkdir(parents=True, exist_ok=True)
+        ensure_writable_dir(self.root)
         payload: dict[str, Any] = {
             "version": VERSION,
             "updated_at": datetime.now(UTC).isoformat(),

@@ -225,3 +225,34 @@ def test_version() -> None:
     result = runner.invoke(cli.app, ["--version"])
     assert result.exit_code == 0
     assert "seesaw-dl" in result.output
+
+
+def test_download_fails_fast_when_the_output_dir_is_unavailable(
+    fake_backend: dict[str, Any], tmp_path: Path
+) -> None:
+    """The unmounted-share case: one line, no traceback, and no feed fetched."""
+    locked = tmp_path / "Volumes"
+    locked.mkdir()
+    locked.chmod(0o500)
+    try:
+        result = runner.invoke(cli.app, ["download", "--out", str(locked / "family" / "Media")])
+    finally:
+        locked.chmod(0o700)
+
+    assert result.exit_code == 1
+    assert "permission denied" in result.output
+    assert "mounted" in result.output
+    assert "Traceback" not in result.output
+    assert "planned_for" not in fake_backend  # nothing was fetched
+    assert fake_backend["downloaded"] is False
+
+
+def test_list_warns_instead_of_failing_when_the_output_dir_is_unavailable(
+    fake_backend: dict[str, Any], tmp_path: Path
+) -> None:
+    """A listing is still useful without presence, so `--out` being gone is a warning."""
+    result = runner.invoke(cli.app, ["list", "--out", str(tmp_path / "not-mounted")])
+    assert result.exit_code == 0
+    # Rich wraps the warning to the terminal width, so compare on collapsed whitespace.
+    assert "presence is unknown" in " ".join(result.output.split())
+    assert fake_backend["is_present"] is None  # presence quietly skipped, not faked
