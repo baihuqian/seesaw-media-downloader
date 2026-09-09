@@ -171,13 +171,13 @@ so compose pulls it rather than building:
 ghcr.io/baihuqian/seesaw-media-downloader:latest
 ```
 
-`latest` and `0.2`/`0.2.0`-style tags come from releases; `edge` tracks `main`. Pin a
+`latest` and `0.0`/`0.0.2`-style tags come from releases; `edge` tracks `main`. Pin a
 version on anything unattended — set `SEESAW_IMAGE` to override the default, or build
 locally instead with `docker compose build`.
 
 ```bash
 docker pull ghcr.io/baihuqian/seesaw-media-downloader:latest
-SEESAW_IMAGE=ghcr.io/baihuqian/seesaw-media-downloader:0.2.0 docker compose run --rm seesaw
+SEESAW_IMAGE=ghcr.io/baihuqian/seesaw-media-downloader:0.0.2 docker compose run --rm seesaw
 ```
 
 The container downloads and exits — there is nothing to keep running between runs.
