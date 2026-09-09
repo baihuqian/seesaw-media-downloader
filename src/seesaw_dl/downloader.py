@@ -22,6 +22,7 @@ from .logging import Reporter
 from .manifest import Manifest
 from .metadata import stamp
 from .models import FeedItem
+from .paths import ensure_writable_dir
 from .planner import Plan, PlannedAsset
 
 CHUNK_SIZE = 1 << 16
@@ -85,7 +86,7 @@ async def _run(
     # The manifest is shared mutable state; serialise writes to it.
     lock = asyncio.Lock()
 
-    root.mkdir(parents=True, exist_ok=True)
+    ensure_writable_dir(root)
     for entry in plan.assets:
         if not entry.should_download:
             report.outcomes.append(

@@ -17,6 +17,7 @@ from .downloader import Report, run_downloads
 from .errors import SeesawError
 from .logging import Reporter, register_secret
 from .manifest import Manifest
+from .paths import MOUNT_HINT, ensure_writable_dir, is_readable_dir
 from .planner import Plan, build_plan, resolve_child
 from .render import plan_json, plan_table
 
@@ -142,6 +143,14 @@ def list_media(
     )
     reporter = Reporter(settings.log_level, json_output=settings.json_output)
     output_dir = settings.output_dir
+    if output_dir is not None and not is_readable_dir(output_dir):
+        # Reporting every asset as missing would be a lie; say why instead and carry on,
+        # since a listing is still useful without the "Have?" column.
+        reporter.warn(
+            f"Output directory {output_dir} is unavailable, so presence is unknown. "
+            f"{MOUNT_HINT}"
+        )
+        output_dir = None
 
     plan, _, _ = _plan_run(settings, reporter, output_dir, mode="list")
 
@@ -181,7 +190,9 @@ def download(
     reporter = Reporter(settings.log_level, json_output=settings.json_output)
 
     try:
-        output_dir = settings.require_output_dir()
+        # Checked before any network work: an unmounted share should fail in a second,
+        # not after the whole feed has been fetched.
+        output_dir = ensure_writable_dir(settings.require_output_dir())
     except SeesawError as exc:
         reporter.error(str(exc))
         raise typer.Exit(code=1) from exc
