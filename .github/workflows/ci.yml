@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv venv --python ${{ matrix.python }}
-      - run: uv pip install -e ".[dev]"
+      - run: uv pip install -e ".[dev,login]"
       # The suite needs no browser: every network call is mocked, so Chromium is not
       # installed here. Only `seesaw-dl login` needs it, and that needs a human anyway.
       - run: uv run ruff check .
@@ -37,3 +37,27 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv build
       - run: uv run --with dist/*.whl --no-project seesaw-dl --version
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: seesaw-media-downloader:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # An arbitrary uid with no /etc/passwd entry is what a NAS actually does, and it is
+      # what would break `Path.home()` at import time if HOME were ever dropped.
+      - run: docker run --rm --user 4242:4242 seesaw-media-downloader:ci --version
+      - run: docker run --rm --user 4242:4242 seesaw-media-downloader:ci download --help
+      # The image must not be able to log in: no Playwright, by construction.
+      - name: login is unavailable in the image
+        run: |
+          if docker run --rm seesaw-media-downloader:ci login --email a@b.c --password x; then
+            echo "::error::login unexpectedly ran inside the container"
+            exit 1
+          fi

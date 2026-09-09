@@ -1,0 +1,33 @@
+# One-shot by design: `docker compose run --rm seesaw` downloads, then the container
+# exits. There is nothing to keep running between downloads -- schedule the command with
+# cron, systemd, or your NAS task scheduler instead of leaving a container up.
+#
+# Sign in on the host first (`seesaw-dl login`): the image has no browser.
+
+services:
+  seesaw:
+    build: .
+    image: seesaw-media-downloader
+    restart: "no"
+
+    # Match the owner of the output share. A Synology admin is typically 1026:100, a QNAP
+    # user 1000:100 -- run `id` over SSH to check. The session file is 0600, so this uid
+    # must also be the one that owns it on the host.
+    user: "${PUID:-1000}:${PGID:-1000}"
+
+    environment:
+      # Decides the dated folder layout and the EXIF stamps.
+      TZ: ${TZ:-UTC}
+      # Only needed when the account has more than one child.
+      SEESAW_CHILD: ${SEESAW_CHILD:-}
+      SEESAW_SINCE: ${SEESAW_SINCE:-}
+      SEESAW_DOWNLOAD_ALL: ${SEESAW_DOWNLOAD_ALL:-false}
+      SEESAW_CONCURRENCY: ${SEESAW_CONCURRENCY:-4}
+      SEESAW_LOG_LEVEL: ${SEESAW_LOG_LEVEL:-info}
+
+    volumes:
+      # Read-only: `download` only ever reads the session, and never writes one back.
+      # Deliberately not `env_file: .env` -- the host `.env` holds the password, and the
+      # container has no use for credentials it cannot log in with.
+      - ${SEESAW_SESSION_HOST_FILE:-~/.config/seesaw-dl/session.json}:/session/session.json:ro
+      - ${SEESAW_OUTPUT_HOST_DIR:-./out}:/data

@@ -148,8 +148,10 @@ def login_with_playwright(
         from playwright.sync_api import sync_playwright
     except ImportError as exc:  # pragma: no cover - import guard
         raise AuthError(
-            "Playwright is not installed. Run: "
-            "pip install playwright && playwright install chromium"
+            "Playwright is not installed, so `login` is unavailable. Install the "
+            "optional 'login' extra, then: playwright install chromium\n"
+            "(The Docker image omits it deliberately: sign in on the host and mount the "
+            "session file into the container.)"
         ) from exc
 
     release: str | None = None
